@@ -287,21 +287,24 @@ function queueTranslate(text){ const p=_q.then(()=>translate(text)); _q=p.catch(
 let current=null; // {id,title,book,chapters:[{href,label}], idx, mode}
 
 async function openFromFile(file){
-  const buf=await file.arrayBuffer();
-  const id=hash(file.name+file.size);
-  let rec=await store.getBook(id);
-  if(!rec){
-    rec={id,name:file.name,data:buf,added:Date.now(),mode:null,cover:null,title:file.name.replace(/\.epub$/i,"")};
-    // try to pull title + cover
-    const probe=ePub(buf);
-    try{
-      await probe.ready;
-      const md=await probe.loaded.metadata; if(md&&md.title) rec.title=md.title;
-      try{ const c=await probe.coverUrl(); if(c){ rec.cover=await blobToDataURL(await (await fetch(c)).blob()); } }catch(_){}
-    }catch(_){}
-    await store.putBook(rec);
-  }
-  if(!rec.mode){ askMode(rec); } else { loadBook(rec); }
+  try{
+    const buf=await file.arrayBuffer();
+    const id=hash(file.name+file.size);
+    let rec=await store.getBook(id);
+    if(!rec){
+      rec={id,name:file.name,data:buf,added:Date.now(),mode:null,cover:null,title:file.name.replace(/\.epub$/i,"")};
+      // probe a SEPARATE COPY so the stored buffer is never detached/consumed
+      try{
+        const probe=ePub(buf.slice(0));
+        await probe.ready;
+        const md=await probe.loaded.metadata; if(md&&md.title) rec.title=md.title;
+        try{ const c=await probe.coverUrl(); if(c){ rec.cover=await blobToDataURL(await (await fetch(c)).blob()); } }catch(_){}
+        try{ probe.destroy(); }catch(_){}
+      }catch(_){}
+      await store.putBook(rec);
+    }
+    if(!rec.mode){ askMode(rec); } else { loadBook(rec); }
+  }catch(err){ reportError("Couldn't open this EPUB",err); }
 }
 function blobToDataURL(b){return new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b);});}
 
@@ -312,16 +315,20 @@ function askMode(rec){
 }
 
 async function loadBook(rec){
-  current={id:rec.id,title:rec.title,mode:rec.mode,book:ePub(rec.data),chapters:[],idx:0};
-  bookTitle.textContent=rec.title;
-  library.style.display="none"; reader.classList.add("active");
-  await current.book.ready;
-  // build a flat chapter list from the spine
-  current.chapters=current.book.spine.spineItems.map(it=>({href:it.href,id:it.idref}));
-  const st=await store.getState(rec.id);
-  current.idx=(st&&st.idx)||0;
-  await renderChapter();
-  if(rec.mode==="save") prefetchWholeBook(rec); // background full translation
+  try{
+    // fresh copy of the stored buffer (the stored one must stay intact for next time)
+    const data=rec.data.slice(0);
+    current={id:rec.id,title:rec.title,mode:rec.mode,book:ePub(data),chapters:[],idx:0};
+    bookTitle.textContent=rec.title;
+    library.style.display="none"; reader.classList.add("active");
+    await current.book.ready;
+    current.chapters=current.book.spine.spineItems.map(it=>({href:it.href,id:it.idref}));
+    if(!current.chapters.length) throw new Error("No readable chapters found in this EPUB.");
+    const st=await store.getState(rec.id);
+    current.idx=(st&&st.idx)||0;
+    await renderChapter();
+    if(rec.mode==="save") prefetchWholeBook(rec);
+  }catch(err){ reportError("Couldn't load this book",err); goHome(); }
 }
 
 async function chapterSegments(href){
@@ -427,6 +434,23 @@ const drop=$("drop"),file=$("file"),modal=$("modal"),pages=$("pages"),pos=$("pos
       shelf=$("shelf"),shelfWrap=$("shelfWrap"),status=$("status"),statusText=$("statusText");
 function showStatus(t){statusText.textContent=t;status.classList.add("show");}
 function hideStatus(){status.classList.remove("show");}
+
+// visible error banner so failures are never silent
+function reportError(msg,err){
+  hideStatus();
+  console.error(msg,err);
+  let bar=document.getElementById("errbar");
+  if(!bar){
+    bar=document.createElement("div");
+    bar.id="errbar";
+    bar.style.cssText="position:fixed;left:1rem;right:1rem;bottom:5rem;z-index:90;background:#b5562f;color:#fff;font-family:var(--ui);font-size:.85rem;padding:.7rem 1rem;border-radius:.6rem;box-shadow:var(--shadow);cursor:pointer;line-height:1.4;";
+    bar.onclick=()=>bar.remove();
+    document.body.appendChild(bar);
+  }
+  bar.textContent=msg+(err?" — "+(err.message||err):"")+"  (tap to dismiss)";
+}
+window.addEventListener("error",e=>reportError("Something went wrong",e.error||e.message));
+window.addEventListener("unhandledrejection",e=>reportError("Something went wrong",e.reason));
 
 drop.onclick=()=>file.click();
 drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();file.click();}};
