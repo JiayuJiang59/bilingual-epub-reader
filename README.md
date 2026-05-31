@@ -19,7 +19,7 @@ A single-file, browser-based EPUB reader that shows **English on the left and Ch
 ## Tech
 Pure HTML/CSS/JS, no build step. Uses [epub.js](https://github.com/futurepress/epub.js) + JSZip (loaded from a CDN) and the free Google Translate web endpoint.
 
-## How this was built (honest provenance)
+## How this was built
 This was built collaboratively in a single conversation: a human directed the design through a structured interview (translation approach, privacy model, storage, UX), and **Claude Opus 4.8** (Anthropic's AI model) wrote the code and the plan. It is a **first build that was not tested in a browser by its author** — expect rough edges, most likely occasional rate-limiting from the free translation endpoint (there's a click-to-retry fallback for that). Treat it as a starting point, not finished software.
 
 ## Want to modify it with your own AI?
