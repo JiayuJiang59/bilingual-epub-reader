@@ -3,7 +3,7 @@ English–Chinese side-by-side EPUB reader for language learning. Single HTML fi
 
 A single-file, browser-based EPUB reader that shows **English on the left and Chinese on the right**, side by side. Made for language learning: read the Chinese to grasp the gist and find what's worth reading deeply, then read the original English. Everything stays on your device — no server, no account, no cost.
 
-> **Suggested GitHub topics** (add these in the repo's "About" gear so people can find it): `epub` `epub-reader` `bilingual` `language-learning` `chinese` `english` `side-by-side` `translation` `reading` `html`
+> **Suggested GitHub topics**: `epub` `epub-reader` `bilingual` `language-learning` `chinese` `english` `side-by-side` `translation` `reading` `html`
 
 ## Use it
 1. Open `index.html` in your browser (double-click the file, or visit the GitHub Pages URL).
@@ -26,4 +26,4 @@ This was built collaboratively in a single conversation: a human directed the de
 See **[PROJECT_PLAN.md](PROJECT_PLAN.md)** in this repo. It's a full handoff spec — every design decision, the reasoning behind it, the build stages, the tech stack, and the known risks — written so you (or any AI assistant) can pick it up cold and extend it. Hand that file to your AI of choice and describe what you want changed.
 
 ## License
-Do whatever you like with it. No warranty.
+MIT.
