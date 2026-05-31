@@ -305,16 +305,10 @@ async function openFromFile(file){
 }
 function blobToDataURL(b){return new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b);});}
 
+let pendingRec=null;
 function askMode(rec){
+  pendingRec=rec;
   modal.classList.add("show");
-  modal.querySelectorAll(".choice").forEach(btn=>{
-    btn.onclick=async()=>{
-      rec.mode=btn.dataset.mode;
-      await store.putBook(rec);
-      modal.classList.remove("show");
-      loadBook(rec);
-    };
-  });
 }
 
 async function loadBook(rec){
@@ -444,6 +438,18 @@ drop.addEventListener("drop",e=>{const f=[...e.dataTransfer.files].find(f=>/\.ep
 $("prev").onclick=()=>step(-1);
 $("next").onclick=()=>step(1);
 $("homeBtn").onclick=goHome;
+
+// mode dialog buttons — wired ONCE at load so they always respond
+modal.querySelectorAll(".choice").forEach(btn=>{
+  btn.addEventListener("click",async()=>{
+    if(!pendingRec)return;
+    const rec=pendingRec; pendingRec=null;
+    rec.mode=btn.dataset.mode;
+    await store.putBook(rec);
+    modal.classList.remove("show");
+    loadBook(rec);
+  });
+});
 document.addEventListener("keydown",e=>{
   if(!reader.classList.contains("active"))return;
   if(e.key==="ArrowRight")step(1);
