@@ -109,6 +109,7 @@
     padding:.1rem 0;border-radius:.5rem;
   }
   .seg.hl{background:color-mix(in srgb,var(--accent) 7%,transparent);}
+  .seg:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;border-radius:.4rem;}
   .col{font-size:var(--fs);line-height:var(--lh);}
   .col.en{color:var(--ink);}
   .col.zh{color:var(--zh);font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",var(--serif);}
@@ -159,14 +160,49 @@
     .col.zh{padding-bottom:.8rem;border-bottom:1px solid var(--rule);margin-bottom:.8rem;}
     .hero h1{font-size:1.9rem;}
   }
+
+  /* progress bar in the nav */
+  .progress{flex:1;max-width:18rem;height:4px;background:var(--rule);border-radius:2px;overflow:hidden;}
+  .progress-fill{height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .3s ease;}
+  /* reader-only bar buttons hidden until a book is open */
+  #menuBtn,#bmAdd{display:none;}
+  body.reading #menuBtn,body.reading #bmAdd{display:inline-flex;}
+
+  /* slide-out menu panel */
+  .panel-bg{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:opacity .25s;}
+  .panel-bg.show{opacity:1;pointer-events:auto;}
+  .panel{
+    position:fixed;top:0;left:0;bottom:0;z-index:71;width:min(85vw,22rem);
+    background:var(--panel);border-right:1px solid var(--rule);box-shadow:var(--shadow);
+    transform:translateX(-100%);transition:transform .28s ease;display:flex;flex-direction:column;font-family:var(--ui);
+  }
+  .panel.show{transform:translateX(0);}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;padding:1rem;border-bottom:1px solid var(--rule);font-family:var(--serif);font-size:1.1rem;color:var(--ink);}
+  .panel-progress{padding:.6rem 1rem;font-size:.8rem;color:var(--ink-soft);border-bottom:1px solid var(--rule);}
+  .panel-tabs{display:flex;border-bottom:1px solid var(--rule);}
+  .ptab{flex:1;appearance:none;border:none;background:none;padding:.7rem;font-family:var(--ui);font-size:.85rem;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;}
+  .ptab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .panel-body{overflow-y:auto;flex:1;padding:.4rem 0;}
+  .toc-item{display:block;width:100%;text-align:left;border:none;background:none;padding:.6rem 1rem;font-family:var(--ui);font-size:.9rem;color:var(--ink);cursor:pointer;border-left:3px solid transparent;line-height:1.35;}
+  .toc-item:hover{background:color-mix(in srgb,var(--accent) 8%,transparent);}
+  .toc-item.current{border-left-color:var(--accent);color:var(--accent);font-weight:600;}
+  .bm-item{display:flex;align-items:flex-start;gap:.5rem;padding:.6rem 1rem;font-family:var(--ui);font-size:.85rem;color:var(--ink);border-left:3px solid var(--accent);}
+  .bm-item .bm-go{flex:1;text-align:left;border:none;background:none;cursor:pointer;color:var(--ink);font-family:var(--ui);font-size:.85rem;line-height:1.35;}
+  .bm-item .bm-go:hover{color:var(--accent);}
+  .bm-item .bm-del{border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:.9rem;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;}
+  .bm-item .bm-del:hover{color:var(--accent);}
+  .ptab:focus-visible,.toc-item:focus-visible,.bm-go:focus-visible{outline:2.5px solid var(--accent);outline-offset:-2px;}
+  .panel-empty{padding:1.2rem 1rem;color:var(--ink-faint);font-size:.85rem;}
 </style>
 </head>
 <body data-theme="light">
 
 <!-- ===================== TOP BAR ===================== -->
 <header class="bar" id="bar">
-  <button class="btn ghost" id="homeBtn" title="Library" aria-label="Library">☰ Library</button>
+  <button class="btn ghost" id="menuBtn" title="Chapters & bookmarks" aria-label="Open menu">☰</button>
+  <button class="btn ghost" id="homeBtn" title="Library" aria-label="Library">Library</button>
   <span class="title" id="bookTitle">Bilingual Reader</span>
+  <button class="btn ghost" id="bmAdd" title="Bookmark this spot" aria-label="Add bookmark">🔖</button>
   <button class="btn ghost" id="aMinus" aria-label="Smaller text">A−</button>
   <button class="btn ghost" id="aPlus" aria-label="Larger text">A+</button>
   <select class="btn" id="theme" aria-label="Theme">
@@ -177,6 +213,7 @@
 </header>
 
 <div class="status" id="status"><span class="spin"></span><span id="statusText">Translating…</span></div>
+<div id="live" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;"></div>
 
 <!-- ===================== LIBRARY ===================== -->
 <main class="wrap" id="library">
@@ -201,10 +238,27 @@
   <div class="pages" id="pages"></div>
   <div class="nav">
     <button class="btn" id="prev">‹ Prev</button>
+    <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
     <span class="pos" id="pos">—</span>
     <button class="btn" id="next">Next ›</button>
   </div>
 </section>
+
+<!-- ===================== SLIDE-OUT MENU ===================== -->
+<div class="panel-bg" id="panelBg"></div>
+<aside class="panel" id="panel" role="dialog" aria-modal="true" aria-label="Chapters and bookmarks" aria-hidden="true">
+  <div class="panel-head">
+    <span id="panelBookTitle">Contents</span>
+    <button class="btn ghost" id="panelClose" aria-label="Close menu">✕</button>
+  </div>
+  <div class="panel-progress" id="panelProgress">—</div>
+  <div class="panel-tabs" role="tablist">
+    <button class="ptab active" data-tab="toc" role="tab" aria-selected="true">Chapters</button>
+    <button class="ptab" data-tab="bm" role="tab" aria-selected="false">Bookmarks</button>
+  </div>
+  <div class="panel-body" id="tabToc" role="tabpanel"></div>
+  <div class="panel-body" id="tabBm" role="tabpanel" style="display:none;"></div>
+</aside>
 
 <!-- ===================== MODE MODAL ===================== -->
 <div class="modal-bg" id="modal">
@@ -318,7 +372,9 @@ function blobToDataURL(b){return new Promise(r=>{const f=new FileReader();f.onlo
 let pendingRec=null;
 function askMode(rec){
   pendingRec=rec;
+  _lastFocus=document.activeElement;
   modal.classList.add("show");
+  setTimeout(()=>{const b=modal.querySelector(".choice");if(b)b.focus();},50);
 }
 
 async function loadBook(rec){
@@ -329,8 +385,9 @@ async function loadBook(rec){
     // open the same EPUB directly with JSZip so we can pull images out ourselves
     try{ current.zip=await JSZip.loadAsync(rec.data.slice(0)); }catch(_){ current.zip=null; }
     bookTitle.textContent=rec.title;
-    library.style.display="none"; reader.classList.add("active");
+    library.style.display="none"; reader.classList.add("active"); document.body.classList.add("reading");
     await current.book.ready;
+    try{ await current.book.loaded.navigation; }catch(_){}
     current.chapters=current.book.spine.spineItems.map(it=>({href:it.href,id:it.idref}));
     if(!current.chapters.length) throw new Error("No readable chapters found in this EPUB.");
     const st=await store.getState(rec.id);
@@ -426,12 +483,15 @@ async function renderChapter(){
     const zh=document.createElement("div"); zh.className="col zh";
     const zhEl=document.createElement(s.tag); zhEl.className="pending"; zhEl.textContent="译文"; zh.appendChild(zhEl);
     row.appendChild(en); row.appendChild(zh);
-    row.addEventListener("click",()=>{document.querySelectorAll(".seg.hl").forEach(x=>x.classList.remove("hl"));row.classList.add("hl");});
+    row.tabIndex=0; row.setAttribute("role","button"); row.setAttribute("aria-label","Highlight this paragraph pair");
+    const doHl=()=>{document.querySelectorAll(".seg.hl").forEach(x=>x.classList.remove("hl"));row.classList.add("hl");};
+    row.addEventListener("click",doHl);
+    row.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();doHl();}});
     pages.appendChild(row);
     segEls.push({zhEl,text:s.text});
   });
   updatePos();
-  saveState();
+  await saveState();
   window.scrollTo({top:0,behavior:"instant"in window?"instant":"auto"});
 
   // fill translations (cache-first; live mode translates on demand here too)
@@ -483,10 +543,136 @@ async function renderShelf(){
 }
 
 /* ---------- (5) Reader navigation + state ---------- */
-function updatePos(){ pos.textContent=`Section ${current.idx+1} / ${current.chapters.length}`; }
-function saveState(){ if(current) store.putState({id:current.id,idx:current.idx,when:Date.now()}); }
-function goHome(){ reader.classList.remove("active"); library.style.display="block"; bookTitle.textContent="Bilingual Reader"; current=null; renderShelf(); }
-async function step(d){ if(!current)return; const n=current.idx+d; if(n<0||n>=current.chapters.length)return; current.idx=n; await renderChapter(); }
+function updatePos(){
+  pos.textContent=`${current.idx+1} / ${current.chapters.length}`;
+  const pct=Math.round(((current.idx+1)/current.chapters.length)*100);
+  const fill=$("progressFill");
+  fill.style.width=pct+"%";
+  const bar=fill.parentElement;
+  bar.setAttribute("role","progressbar");
+  bar.setAttribute("aria-valuenow",pct);
+  bar.setAttribute("aria-valuemin","0");
+  bar.setAttribute("aria-valuemax","100");
+  bar.setAttribute("aria-label","Reading progress");
+  $("panelProgress").textContent=`Section ${current.idx+1} of ${current.chapters.length} · ${pct}% through`;
+  announce(`Section ${current.idx+1} of ${current.chapters.length}`);
+}
+async function saveState(){
+  if(!current) return;
+  // preserve existing fields (esp. bookmarks) — only update position
+  const prev=await store.getState(current.id)||{id:current.id};
+  prev.idx=current.idx;
+  prev.when=Date.now();
+  await store.putState(prev);
+}
+function goHome(){ reader.classList.remove("active"); library.style.display="block"; document.body.classList.remove("reading"); bookTitle.textContent="Bilingual Reader"; current=null; closePanel(); renderShelf(); }
+async function step(d){ if(!current)return; const n=current.idx+d; if(n<0||n>=current.chapters.length)return; current.idx=n; await renderChapter(); markCurrentToc(); }
+async function gotoChapter(i){ if(!current||i<0||i>=current.chapters.length)return; current.idx=i; await renderChapter(); markCurrentToc(); closePanel(); }
+
+/* ---------- (5b) Menu panel: TOC + bookmarks ---------- */
+let _lastFocus=null;
+function openPanel(){
+  _lastFocus=document.activeElement;
+  const panel=$("panel");
+  panel.classList.add("show"); $("panelBg").classList.add("show");
+  panel.setAttribute("aria-hidden","false");
+  buildToc();
+  // move focus into the panel (the close button is a safe first stop)
+  setTimeout(()=>$("panelClose").focus(),50);
+}
+function closePanel(){
+  const panel=$("panel");
+  panel.classList.remove("show"); $("panelBg").classList.remove("show");
+  panel.setAttribute("aria-hidden","true");
+  if(_lastFocus&&_lastFocus.focus){_lastFocus.focus();_lastFocus=null;}
+}
+// keep keyboard focus inside an open panel/dialog; Escape closes it
+function trapFocus(container,e){
+  if(e.key==="Tab"){
+    const f=container.querySelectorAll('button,[href],input,select,[tabindex]:not([tabindex="-1"])');
+    const list=[...f].filter(el=>el.offsetParent!==null);
+    if(!list.length) return;
+    const first=list[0],last=list[list.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  }
+}
+
+function buildToc(){
+  $("panelBookTitle").textContent=current?current.title:"Contents";
+  const box=$("tabToc"); box.innerHTML="";
+  if(!current){box.innerHTML='<div class="panel-empty">Open a book first.</div>';return;}
+  // prefer the book's real table of contents; fall back to spine sections
+  const nav=current.book.navigation;
+  const items=(nav&&nav.toc&&nav.toc.length)?nav.toc:null;
+  if(items){
+    items.forEach(t=>{
+      const b=document.createElement("button"); b.className="toc-item"; b.textContent=t.label.trim()||"(untitled)";
+      b.onclick=()=>{ const i=findSpineIndex(t.href); if(i>=0) gotoChapter(i); };
+      box.appendChild(b);
+    });
+  }else{
+    current.chapters.forEach((c,i)=>{
+      const b=document.createElement("button"); b.className="toc-item"; b.textContent=`Section ${i+1}`;
+      b.onclick=()=>gotoChapter(i);
+      box.appendChild(b);
+    });
+  }
+  markCurrentToc();
+}
+function findSpineIndex(href){
+  if(!href) return -1;
+  const clean=href.split("#")[0].split("/").pop();
+  return current.chapters.findIndex(c=>c.href.split("/").pop()===clean);
+}
+function markCurrentToc(){
+  const nav=current&&current.book.navigation;
+  const items=$("tabToc").querySelectorAll(".toc-item");
+  items.forEach(el=>el.classList.remove("current"));
+  // best-effort: if using spine fallback, index matches directly
+  if(!(nav&&nav.toc&&nav.toc.length)&&items[current.idx]) items[current.idx].classList.add("current");
+}
+
+async function addBookmark(){
+  if(!current)return;
+  const st=await store.getState(current.id)||{id:current.id};
+  const bms=st.bookmarks||[];
+  if(bms.some(b=>b.idx===current.idx)){ flashBar("Already bookmarked"); return; }
+  // grab a short snippet of the current chapter's first line for context
+  let label=`Section ${current.idx+1}`;
+  const firstText=pages.querySelector(".col.en")?.textContent?.trim();
+  if(firstText) label=firstText.slice(0,60)+(firstText.length>60?"…":"");
+  bms.push({idx:current.idx,label,when:Date.now()});
+  st.bookmarks=bms; st.idx=current.idx;
+  await store.putState(st);
+  flashBar("Bookmarked");
+  buildBookmarks();
+}
+async function buildBookmarks(){
+  const box=$("tabBm"); box.innerHTML="";
+  if(!current){box.innerHTML='<div class="panel-empty">Open a book first.</div>';return;}
+  const st=await store.getState(current.id);
+  const bms=(st&&st.bookmarks)||[];
+  if(!bms.length){box.innerHTML='<div class="panel-empty">No bookmarks yet. Tap 🔖 in the top bar to save your spot.</div>';return;}
+  bms.sort((a,b)=>a.idx-b.idx).forEach(bm=>{
+    const row=document.createElement("div"); row.className="bm-item";
+    const go=document.createElement("button"); go.className="bm-go"; go.textContent=bm.label;
+    go.onclick=()=>gotoChapter(bm.idx);
+    const del=document.createElement("button"); del.className="bm-del"; del.textContent="✕"; del.title="Remove";
+    del.onclick=async()=>{ const s=await store.getState(current.id); s.bookmarks=(s.bookmarks||[]).filter(x=>x.idx!==bm.idx); await store.putState(s); buildBookmarks(); };
+    row.appendChild(go); row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+function flashBar(msg){
+  announce(msg);
+  let el=document.getElementById("flash");
+  if(!el){el=document.createElement("div");el.id="flash";el.style.cssText="position:fixed;bottom:5rem;left:50%;transform:translateX(-50%);z-index:95;background:var(--ink);color:var(--paper);font-family:var(--ui);font-size:.8rem;padding:.5rem 1rem;border-radius:2rem;box-shadow:var(--shadow);opacity:0;transition:opacity .2s;";document.body.appendChild(el);}
+  el.textContent=msg; el.style.opacity="1";
+  clearTimeout(el._t); el._t=setTimeout(()=>el.style.opacity="0",1400);
+}
+// announce a message to screen readers via the polite live region
+function announce(msg){ const l=document.getElementById("live"); if(l){ l.textContent=""; setTimeout(()=>l.textContent=msg,30); } }
 
 /* ---------- (6) UI wiring ---------- */
 const $=id=>document.getElementById(id);
@@ -509,6 +695,7 @@ function reportError(msg,err){
     document.body.appendChild(bar);
   }
   bar.textContent=msg+(err?" — "+(err.message||err):"")+"  (tap to dismiss)";
+  announce(msg);
 }
 window.addEventListener("error",e=>reportError("Something went wrong",e.error||e.message));
 window.addEventListener("unhandledrejection",e=>reportError("Something went wrong",e.reason));
@@ -524,6 +711,22 @@ $("prev").onclick=()=>step(-1);
 $("next").onclick=()=>step(1);
 $("homeBtn").onclick=goHome;
 
+// menu panel + bookmarks wiring
+$("menuBtn").onclick=openPanel;
+$("panelClose").onclick=closePanel;
+$("panelBg").onclick=closePanel;
+$("bmAdd").onclick=addBookmark;
+document.querySelectorAll(".ptab").forEach(tab=>{
+  tab.onclick=()=>{
+    document.querySelectorAll(".ptab").forEach(t=>{t.classList.remove("active");t.setAttribute("aria-selected","false");});
+    tab.classList.add("active"); tab.setAttribute("aria-selected","true");
+    const which=tab.dataset.tab;
+    $("tabToc").style.display=which==="toc"?"block":"none";
+    $("tabBm").style.display=which==="bm"?"block":"none";
+    if(which==="bm") buildBookmarks();
+  };
+});
+
 // mode dialog buttons — wired ONCE at load so they always respond
 modal.querySelectorAll(".choice").forEach(btn=>{
   btn.addEventListener("click",async()=>{
@@ -536,6 +739,14 @@ modal.querySelectorAll(".choice").forEach(btn=>{
   });
 });
 document.addEventListener("keydown",e=>{
+  const panelOpen=$("panel").classList.contains("show");
+  const modalOpen=modal.classList.contains("show");
+  // Escape closes the menu panel (the mode dialog requires a choice, so it stays)
+  if(e.key==="Escape"&&panelOpen){ closePanel(); return; }
+  // trap focus inside whichever overlay is open
+  if(panelOpen){ trapFocus($("panel"),e); return; }
+  if(modalOpen){ trapFocus(modal,e); return; }
+  // arrow-key page nav only while reading and no overlay is open
   if(!reader.classList.contains("active"))return;
   if(e.key==="ArrowRight")step(1);
   if(e.key==="ArrowLeft")step(-1);
