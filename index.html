@@ -16,7 +16,9 @@
     --ink-soft:#5b5750;
     --ink-faint:#706a5e;
     --rule:#e7e1d6;
-    --accent:#b5562f;          /* restrained warm accent */
+    --accent:#0f7b6c;          /* teal accent (contrast 4.86 on cream) */
+    --accent-deep:#0b5d52;     /* stronger teal for text (7.32) */
+    --star:#a9780a;            /* rating gold */
     --zh:#2f2a24;              /* chinese column ink, slightly distinct */
     --panel:#fffdf8;
     --shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.06);
@@ -28,11 +30,11 @@
   }
   [data-theme="sepia"]{
     --paper:#f4ecd8; --ink:#3b3228; --ink-soft:#6b5d49; --ink-faint:#6f6552; --rule:#e0d4ba;
-    --panel:#f8f1e0; --zh:#3b3228;
+    --panel:#f8f1e0; --zh:#3b3228; --accent:#0d6f61; --accent-deep:#0a574c; --star:#9a6d09;
   }
   [data-theme="dark"]{
     --paper:#1a1815; --ink:#e9e4da; --ink-soft:#a59f93; --ink-faint:#948e80;
-    --rule:#33302a; --accent:#e08a5f; --zh:#e9e4da; --panel:#211e1a;
+    --rule:#33302a; --accent:#4cc4ad; --accent-deep:#6ad6c0; --star:#e0b94e; --zh:#e9e4da; --panel:#211e1a;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
   }
 
@@ -85,23 +87,7 @@
   }
   .drop.drag{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel));}
   .note{font-family:var(--ui);font-size:.8rem;color:var(--ink-faint);text-align:center;margin-top:1rem;}
-  .backup-row{display:flex;gap:.75rem;justify-content:center;margin-top:2.5rem;flex-wrap:wrap;}
   .note code{background:var(--rule);padding:.05rem .35rem;border-radius:.3rem;}
-
-  .shelf-title{font-family:var(--ui);font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin:2rem 0 .75rem;}
-  .shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:1.25rem;}
-  .card{cursor:pointer;text-align:left;border:none;background:none;padding:0;}
-  .cover{
-    aspect-ratio:2/3;border-radius:.4rem;background:var(--panel);box-shadow:var(--shadow);
-    display:flex;align-items:flex-end;padding:.6rem;overflow:hidden;position:relative;
-    transition:transform .18s ease;
-  }
-  .card:hover .cover{transform:translateY(-3px);}
-  .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-  .cover .fallback{font-family:var(--serif);font-size:.85rem;color:var(--ink);line-height:1.3;position:relative;z-index:1;}
-  .card .meta{font-family:var(--ui);font-size:.78rem;color:var(--ink-soft);margin-top:.4rem;line-height:1.3;}
-  .card .del{font-family:var(--ui);font-size:.7rem;color:var(--ink-faint);margin-top:.15rem;}
-  .card .del:hover{color:var(--accent);}
 
   /* ---------- READER ---------- */
   #reader{display:none;}
@@ -196,6 +182,91 @@
   .bm-item .bm-del:hover{color:var(--accent);}
   .ptab:focus-visible,.toc-item:focus-visible,.bm-go:focus-visible{outline:2.5px solid var(--accent);outline-offset:-2px;}
   .panel-empty{padding:1.2rem 1rem;color:var(--ink-faint);font-size:.85rem;}
+
+  /* ===== a11y note + backup block ===== */
+  .a11y-note{font-family:var(--ui);font-size:.8rem;color:var(--ink-faint);margin-top:.6rem;}
+  .a11y-note a{color:var(--accent-deep);}
+  .backup{max-width:38rem;margin:1.5rem auto 0;text-align:center;}
+  .backup .lead{font-family:var(--ui);font-size:.9rem;color:var(--ink);margin:0 0 .2rem;font-weight:600;}
+  .backup .hint{font-family:var(--ui);font-size:.82rem;color:var(--ink-soft);margin:0 0 .9rem;line-height:1.45;}
+  .backup-row{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;}
+
+  /* ===== dashboard ===== */
+  .dash{max-width:38rem;margin:2rem auto 0;background:var(--panel);border:1px solid var(--rule);border-radius:1.25rem;box-shadow:var(--shadow);padding:1.5rem;}
+  .dash h2{font-family:var(--serif);font-size:1.2rem;font-weight:600;margin:0 0 1.1rem;}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+  .tile{text-align:center;}
+  .tile .num{font-family:var(--serif);font-size:1.7rem;font-weight:600;line-height:1;}
+  .tile .num .unit{font-size:.8rem;color:var(--ink-soft);font-family:var(--ui);}
+  .tile .lbl{font-size:.7rem;color:var(--ink-faint);margin-top:.4rem;letter-spacing:.03em;text-transform:uppercase;}
+  .dash .divider{height:1px;background:var(--rule);margin:1.3rem 0;}
+  .dash .top{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;}
+  .ring{position:relative;width:96px;height:96px;flex-shrink:0;}
+  .ring svg{transform:rotate(-90deg);}
+  .ring .rbg{fill:none;stroke:var(--rule);stroke-width:10;}
+  .ring .rfg{fill:none;stroke:var(--accent);stroke-width:10;stroke-linecap:round;transition:stroke-dashoffset .6s ease;}
+  .ring .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.25rem;font-weight:600;color:var(--accent-deep);}
+  .goal .big{font-family:var(--serif);font-size:1.3rem;font-weight:600;}
+  .goal .small{color:var(--ink-soft);font-size:.85rem;margin-top:.25rem;font-family:var(--ui);}
+  .goal .setter{margin-top:.7rem;display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--ink-soft);font-family:var(--ui);}
+  .goal .setter input{width:3.5rem;padding:.3rem .4rem;border:1px solid var(--rule);border-radius:.45rem;font-family:var(--ui);background:var(--paper);color:var(--ink);}
+  .streak-title{font-size:.85rem;color:var(--ink-soft);text-align:center;margin:0 0 .7rem;font-family:var(--ui);}
+  .streak{display:flex;gap:.5rem;justify-content:center;}
+  .day{display:flex;flex-direction:column;align-items:center;gap:.3rem;}
+  .day .dot{width:22px;height:22px;border-radius:50%;background:var(--rule);display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#fff;}
+  .day .dot.on{background:var(--accent);}
+  .day .dot.today{background:var(--panel);border:2px solid var(--accent);box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--accent);}
+  .day .dot.today::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);}
+  .day .name{font-size:.65rem;color:var(--ink-faint);font-family:var(--ui);}
+
+  /* ===== section headers + recent ===== */
+  .sec-title{font-family:var(--ui);font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin:2.5rem 0 1rem;}
+  .recent{display:flex;gap:1.25rem;overflow-x:auto;padding-bottom:.5rem;}
+  .recent .book{flex:0 0 130px;}
+
+  /* ===== shelf toolbar ===== */
+  .shelf-bar{display:flex;align-items:center;gap:.75rem;margin:2.5rem 0 1.25rem;flex-wrap:wrap;}
+  .shelf-bar .sec-title{margin:0;flex:1;}
+  .control{font-family:var(--ui);font-size:.82rem;color:var(--ink-soft);display:inline-flex;align-items:center;gap:.4rem;}
+  select.sort{appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--ink);border-radius:.5rem;padding:.35rem 1.6rem .35rem .6rem;font-family:var(--ui);font-size:.82rem;cursor:pointer;}
+  .viewtoggle{display:inline-flex;border:1px solid var(--rule);border-radius:.5rem;overflow:hidden;}
+  .viewtoggle button{appearance:none;border:none;background:var(--panel);color:var(--ink-soft);padding:.35rem .6rem;font-family:var(--ui);font-size:.85rem;cursor:pointer;}
+  .viewtoggle button.active{background:var(--accent);color:#fff;}
+  .viewtoggle button:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;}
+
+  /* ===== shelf: gallery + list ===== */
+  .shelf.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1.5rem;}
+  .shelf.list{display:flex;flex-direction:column;gap:.5rem;}
+  .list .bookrow{display:flex;align-items:center;gap:1rem;padding:.7rem;border:1px solid var(--rule);border-radius:.7rem;background:var(--panel);}
+  .list .bookrow .cover{width:42px;height:63px;flex-shrink:0;font-size:.55rem;padding:.2rem;border-radius:.3rem;cursor:pointer;}
+  .list .info{flex:1;min-width:0;}
+  .list .rightcol{display:flex;flex-direction:column;align-items:flex-end;gap:.3rem;}
+
+  .cover{aspect-ratio:2/3;width:100%;border-radius:.5rem;box-shadow:var(--shadow);position:relative;overflow:hidden;color:#fff;background:linear-gradient(140deg,var(--accent),var(--accent-deep));cursor:pointer;display:block;padding:0;border:none;}
+  .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .cover .fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:.8rem;font-family:var(--serif);font-size:.85rem;line-height:1.35;}
+  .cover .fallback span{display:-webkit-box;-webkit-line-clamp:7;-webkit-box-orient:vertical;overflow:hidden;}
+  .cover:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;}
+  .badge{position:absolute;top:.4rem;right:.4rem;background:var(--accent);color:#fff;font-family:var(--ui);font-size:.6rem;font-weight:600;padding:.15rem .45rem;border-radius:1rem;z-index:2;}
+  .badge-muted{background:var(--ink-soft);}
+  .statussel{margin-top:.5rem;appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--ink);border-radius:.5rem;padding:.28rem 1.4rem .28rem .5rem;font-family:var(--ui);font-size:.74rem;cursor:pointer;}
+  .statussel:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;}
+  .rightcol .statussel{margin-top:0;}
+  .bookmeta{margin-top:.6rem;}
+  .bookmeta .bt{font-family:var(--ui);font-size:.88rem;font-weight:600;color:var(--ink);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .bookmeta .status{font-family:var(--ui);font-size:.75rem;color:var(--ink-soft);margin-top:.15rem;}
+  .stars{margin-top:.4rem;display:flex;gap:.1rem;}
+  .rightcol .stars{margin-top:0;}
+  .stars button{appearance:none;border:none;background:none;font-size:1.15rem;color:var(--rule);line-height:1;cursor:pointer;padding:0 1px;min-width:24px;min-height:24px;}
+  .stars button.on{color:var(--star);}
+  .stars button:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:3px;}
+  .comment{font-family:var(--serif);font-style:italic;font-size:.82rem;color:var(--ink-soft);margin-top:.4rem;line-height:1.35;cursor:pointer;}
+  .comment.empty{color:var(--ink-faint);font-style:normal;font-family:var(--ui);font-size:.78rem;}
+  .mark{margin-top:.5rem;font-family:var(--ui);font-size:.74rem;color:var(--accent-deep);background:none;border:1px solid var(--rule);border-radius:.5rem;padding:.28rem .6rem;cursor:pointer;}
+  .rightcol .mark{margin-top:0;}
+  .mark:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;}
+  .book .remove{font-family:var(--ui);font-size:.7rem;color:var(--ink-faint);background:none;border:none;cursor:pointer;margin-top:.3rem;}
+  .book .remove:hover{color:var(--accent);}
 </style>
 </head>
 <body data-theme="light">
@@ -223,24 +294,84 @@
   <div class="hero">
     <h1>Bilingual Reader</h1>
     <p>English on the left, Chinese on the right. Everything stays on this device — nothing is ever uploaded.</p>
+    <p class="a11y-note">Built with accessibility in mind. <a href="https://github.com/JiayuJiang59/bilingual-epub-reader/blob/main/ACCESSIBILITY.md" target="_blank" rel="noopener">Read the accessibility report →</a></p>
   </div>
+
+  <!-- backup, right under the hero so it's easy to find -->
+  <div class="backup">
+    <p class="lead">Keep your library safe</p>
+    <p class="hint">Back up to save all your books, notes, and progress to a single file. Restore to bring them back — or to move your whole library to another device. Your files never leave your control.</p>
+    <div class="backup-row">
+      <button class="btn" id="exportBtn">⬇ Back up to a file</button>
+      <button class="btn" id="importBtn">⬆ Restore from a file</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+  </div>
+
   <div class="drop" id="drop" tabindex="0" role="button" aria-label="Open an EPUB file">
     <strong>Drop an EPUB here</strong><br>or click to choose a file
     <input type="file" id="file" accept=".epub" hidden>
   </div>
   <p class="note">EPUB only. Have a MOBI? Convert it to EPUB in <code>Calibre</code> (free) — drag the file in, right-click → Convert → EPUB.</p>
 
-  <div id="shelfWrap" style="display:none;">
-    <div class="shelf-title">Your books</div>
-    <div class="shelf" id="shelf"></div>
+  <!-- DASHBOARD -->
+  <section class="dash" id="dash" aria-labelledby="dashTitle" style="display:none;">
+    <h2 id="dashTitle">Today's reading</h2>
+    <div class="tiles">
+      <div class="tile"><div class="num" id="statToday">0<span class="unit"> min</span></div><div class="lbl">Today</div></div>
+      <div class="tile"><div class="num" id="statStreak">0<span class="unit"> days</span></div><div class="lbl">Streak</div></div>
+      <div class="tile"><div class="num" id="statTotal">0<span class="unit"> h</span></div><div class="lbl">All time</div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="top">
+      <div class="ring" id="goalRing" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Progress toward today's reading goal">
+        <svg width="96" height="96" aria-hidden="true"><circle class="rbg" cx="48" cy="48" r="40"></circle><circle class="rfg" cx="48" cy="48" r="40" id="ringFill"></circle></svg>
+        <div class="pct" id="ringPct" aria-hidden="true">0%</div>
+      </div>
+      <div class="goal">
+        <div class="big" id="goalBig">0 of 30 min</div>
+        <div class="small" id="goalSmall">Set a daily goal and start reading</div>
+        <label class="setter">Daily goal: <input type="number" id="goalInput" value="30" min="1" max="600" aria-label="Daily reading goal in minutes"> min</label>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <p class="streak-title" id="streakLbl">This week</p>
+    <div class="streak" id="streakStrip" role="group" aria-labelledby="streakLbl"></div>
+  </section>
+
+  <!-- RECENTLY OPENED -->
+  <div id="recentWrap" style="display:none;">
+    <div class="sec-title">Recently opened</div>
+    <div class="recent" id="recent"></div>
   </div>
 
-  <div class="backup-row">
-    <button class="btn" id="exportBtn">⬇ Back up everything</button>
-    <button class="btn" id="importBtn">⬆ Restore from backup</button>
-    <input type="file" id="importFile" accept=".json,application/json" hidden>
+  <!-- BOOKSHELF -->
+  <div id="shelfWrap" style="display:none;">
+    <div class="shelf-bar">
+      <span class="sec-title" id="shelfHeading">Your bookshelf</span>
+      <label class="control">Sort
+        <select class="sort" id="sortSel" aria-label="Sort books">
+          <option value="recent">Recently opened</option>
+          <option value="title">Title A–Z</option>
+          <option value="added">Date added</option>
+          <option value="rating">Rating</option>
+          <option value="status">Status</option>
+        </select>
+      </label>
+      <label class="control">Covers
+        <select class="sort" id="coverSel" aria-label="Cover style">
+          <option value="art">Book cover art</option>
+          <option value="color">Color &amp; title</option>
+        </select>
+      </label>
+      <div class="viewtoggle" role="group" aria-label="View mode">
+        <button id="gBtn" class="active" aria-pressed="true">▦ Gallery</button>
+        <button id="lBtn" aria-pressed="false">☰ List</button>
+      </div>
+    </div>
+    <div class="shelf gallery" id="shelf"></div>
   </div>
-  <p class="note">Your library lives only in this browser. Back up to a file so nothing is lost if the browser clears its storage — and to move your books between devices.</p>
+
 </main>
 
 <!-- ===================== READER ===================== -->
@@ -336,6 +467,47 @@ const store={
 };
 function hash(str){let h=5381;for(let i=0;i<str.length;i++)h=((h<<5)+h+str.charCodeAt(i))>>>0;return "t"+h;}
 
+/* ---------- (1b) Dashboard data + reading-time tracking ---------- */
+const DASH_KEY="__dashboard__";
+function todayKey(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+async function getDash(){
+  const d=await store.getState(DASH_KEY)||{id:DASH_KEY,goal:30,days:{},total:0};
+  if(!d.days) d.days={}; if(!d.goal) d.goal=30; if(!d.total) d.total=0;
+  return d;
+}
+async function saveDash(d){ d.id=DASH_KEY; await store.putState(d); }
+// add reading seconds to today's tally + all-time total
+async function addReadingTime(sec){
+  if(sec<=0) return;
+  const d=await getDash();
+  const k=todayKey();
+  d.days[k]=(d.days[k]||0)+sec;
+  d.total=(d.total||0)+sec;
+  await saveDash(d);
+}
+// compute consecutive-day streak ending today (or yesterday if not read today yet)
+function computeStreak(days){
+  let streak=0; const d=new Date();
+  // if today has no reading, start counting from yesterday so a streak isn't "broken" mid-day
+  const hasToday=(days[fmt(d)]||0)>0;
+  if(!hasToday) d.setDate(d.getDate()-1);
+  while((days[fmt(d)]||0)>0){ streak++; d.setDate(d.getDate()-1); }
+  return streak;
+}
+function fmt(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+
+// timer: counts seconds only while a book is open AND the tab is focused
+let _readStart=null;
+function startReadingTimer(){ if(_readStart==null && document.visibilityState==="visible") _readStart=Date.now(); }
+async function stopReadingTimer(){
+  if(_readStart!=null){ const sec=Math.round((Date.now()-_readStart)/1000); _readStart=null; await addReadingTime(sec); }
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){ if(current) startReadingTimer(); }
+  else { stopReadingTimer(); }
+});
+window.addEventListener("beforeunload",()=>{ stopReadingTimer(); });
+
 /* ---------- (2) Translation: free Google endpoint, cached, queued ---------- */
 async function translate(text){
   const t=text.trim(); if(!t) return "";
@@ -407,6 +579,9 @@ async function loadBook(rec){
     const st=await store.getState(rec.id);
     current.idx=(st&&st.idx)||0;
     await renderChapter();
+    startReadingTimer();
+    // record last-opened time for the "Recently opened" ordering
+    try{ const st2=await store.getState(rec.id)||{id:rec.id}; st2.lastOpened=Date.now(); await store.putState(st2); }catch(_){}
     if(rec.mode==="save") prefetchWholeBook(rec);
   }catch(err){ reportError("Couldn't load this book",err); goHome(); }
 }
@@ -536,25 +711,220 @@ async function prefetchWholeBook(rec){
   hideStatus();
 }
 
-/* ---------- (4) Library / shelf ---------- */
-async function renderShelf(){
+/* ---------- (4) Library: dashboard + recent + bookshelf ---------- */
+let _view="gallery", _sort="recent", _coverStyle="art";
+
+async function renderHome(){
+  await Promise.all([renderDashboard(), renderBooks()]);
+}
+
+async function renderDashboard(){
+  const d=await getDash();
+  const todaySec=d.days[todayKey()]||0;
+  const todayMin=Math.round(todaySec/60);
+  const goal=d.goal||30;
+  const streak=computeStreak(d.days);
+  const totalH=(d.total/3600);
+  // only show the dashboard once there's a book (avoids an empty card on first run)
   const books=await store.allBooks();
-  if(!books.length){ shelfWrap.style.display="none"; return; }
-  shelfWrap.style.display="block";
-  shelf.innerHTML="";
-  books.sort((a,b)=>b.added-a.added).forEach(b=>{
-    const card=document.createElement("button"); card.className="card";
-    const cover=document.createElement("div"); cover.className="cover";
-    if(b.cover){const img=new Image();img.src=b.cover;img.alt="";cover.appendChild(img);}
-    else{const f=document.createElement("div");f.className="fallback";f.textContent=b.title;cover.appendChild(f);}
-    const meta=document.createElement("div"); meta.className="meta"; meta.textContent=b.title;
-    const del=document.createElement("div"); del.className="del"; del.textContent="Remove";
-    del.onclick=async(e)=>{e.stopPropagation();await store.delBook(b.id);renderShelf();};
-    card.appendChild(cover);card.appendChild(meta);card.appendChild(del);
-    card.onclick=()=>{ store.getBook(b.id).then(rec=>{ if(!rec.mode)askMode(rec); else loadBook(rec); }); };
-    shelf.appendChild(card);
+  document.getElementById("dash").style.display=books.length?"block":"none";
+  if(!books.length) return;
+
+  $("statToday").innerHTML=`${todayMin}<span class="unit"> min</span>`;
+  $("statStreak").innerHTML=`${streak}<span class="unit"> ${streak===1?"day":"days"}</span>`;
+  $("statTotal").innerHTML=`${totalH<10?totalH.toFixed(1):Math.round(totalH)}<span class="unit"> h</span>`;
+
+  const pct=Math.min(100,Math.round((todayMin/goal)*100));
+  const ring=$("ringFill"), C=2*Math.PI*40;
+  ring.style.strokeDasharray=C;
+  const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  ring.style.strokeDashoffset = reduce ? C*(1-pct/100) : C;
+  if(!reduce) requestAnimationFrame(()=>{ring.style.strokeDashoffset=C*(1-pct/100);});
+  $("ringPct").textContent=pct+"%";
+  $("goalRing").setAttribute("aria-valuenow",pct);
+  $("goalBig").textContent=`${todayMin} of ${goal} min`;
+  $("goalSmall").textContent = todayMin>=goal ? "Goal reached today — nicely done" : `${goal-todayMin} minutes to reach today's goal`;
+  $("goalInput").value=goal;
+
+  // streak strip: last 7 days Mon..Sun of the current week
+  const strip=$("streakStrip"); strip.innerHTML="";
+  const names=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const now=new Date(); const dow=(now.getDay()+6)%7; // 0=Mon
+  for(let i=0;i<7;i++){
+    const day=new Date(now); day.setDate(now.getDate()-dow+i);
+    const read=(d.days[fmt(day)]||0)>0;
+    const isToday=fmt(day)===todayKey();
+    const wrap=document.createElement("div"); wrap.className="day";
+    const dot=document.createElement("div"); dot.className="dot"+(read?" on":"")+(isToday?" today":"");
+    dot.setAttribute("aria-hidden","true"); if(read&&!isToday) dot.textContent="✓";
+    const nm=document.createElement("span"); nm.className="name"; nm.textContent=names[i];
+    wrap.appendChild(dot); wrap.appendChild(nm); strip.appendChild(wrap);
+  }
+  strip.setAttribute("aria-label",`This week: read on ${Object.keys(d.days).length? "several days":"no days yet"}. Current streak ${streak} days.`);
+}
+
+// goal input
+function wireGoalInput(){
+  const inp=$("goalInput");
+  inp.addEventListener("change",async()=>{
+    let g=parseInt(inp.value,10); if(isNaN(g)||g<1) g=1; if(g>600) g=600;
+    const d=await getDash(); d.goal=g; await saveDash(d); renderDashboard();
   });
 }
+
+async function renderBooks(){
+  const books=await store.allBooks();
+  if(!books.length){ shelfWrap.style.display="none"; recentWrap.style.display="none"; return; }
+  // attach each book's state (position, completion, rating, comment, lastOpened)
+  const states={}; (await store.allStates()).forEach(s=>{ if(s.id!==DASH_KEY) states[s.id]=s; });
+  books.forEach(b=>{ b._st=states[b.id]||{}; });
+
+  // RECENTLY OPENED — by lastOpened desc, top 8
+  const recents=books.filter(b=>b._st.lastOpened).sort((a,b)=>b._st.lastOpened-a._st.lastOpened).slice(0,8);
+  recentWrap.style.display=recents.length?"block":"none";
+  recent.innerHTML="";
+  recents.forEach(b=>recent.appendChild(bookCard(b,true)));
+
+  // BOOKSHELF — sorted per current selection
+  shelfWrap.style.display="block";
+  const sorted=[...books].sort((a,b)=>{
+    switch(_sort){
+      case "title": return (a.title||"").localeCompare(b.title||"");
+      case "added": return (b.added||0)-(a.added||0);
+      case "rating": return (b._st.rating||0)-(a._st.rating||0);
+      case "status": { const order={reading:0,completed:1,notforme:2}; return (order[statusOf(a)]||0)-(order[statusOf(b)]||0); }
+      default: return (b._st.lastOpened||0)-(a._st.lastOpened||0);
+    }
+  });
+  shelf.className="shelf "+_view;
+  shelf.innerHTML="";
+  sorted.forEach(b=>shelf.appendChild(_view==="list"?bookRow(b):bookCard(b,false)));
+}
+
+function coverEl(b,small){
+  const cover=document.createElement(small?"div":"button");
+  cover.className="cover";
+  if(!small){ cover.type="button"; cover.setAttribute("aria-label","Open "+(b.title||"book")); }
+  if(small){
+    // list view: just the first letter of the title, like an avatar
+    const f=document.createElement("div"); f.className="fallback";
+    const sp=document.createElement("span"); sp.textContent=(b.title||"?").trim().charAt(0).toUpperCase(); sp.style.fontSize="1.1rem";
+    f.appendChild(sp); cover.appendChild(f);
+  } else if(_coverStyle==="art" && b.cover){
+    const img=new Image(); img.src=b.cover; img.alt=""; cover.appendChild(img);
+  } else {
+    const f=document.createElement("div"); f.className="fallback";
+    const sp=document.createElement("span"); sp.textContent=b.title||"Untitled"; f.appendChild(sp);
+    cover.appendChild(f);
+  }
+  const status=statusOf(b);
+  if(status==="completed"){ const bd=document.createElement("span"); bd.className="badge"; bd.textContent="Done"; cover.appendChild(bd); }
+  else if(status==="notforme"){ const bd=document.createElement("span"); bd.className="badge badge-muted"; bd.textContent="Not for me"; cover.appendChild(bd); }
+  cover.onclick=()=>openBook(b);
+  return cover;
+}
+function openBook(b){ store.getBook(b.id).then(rec=>{ if(!rec.mode)askMode(rec); else loadBook(rec); }); }
+
+// normalize a book's status from stored state (back-compat with old 'completed' flag)
+function statusOf(b){
+  if(b._st.status) return b._st.status;
+  if(b._st.completed) return "completed";
+  return "reading";
+}
+function bookStatus(b){
+  const s=statusOf(b);
+  if(s==="completed"){ const when=b._st.completedAt?new Date(b._st.completedAt).toLocaleDateString(undefined,{month:"short",year:"numeric"}):""; return "Completed"+(when?" · "+when:""); }
+  if(s==="notforme"){ return "Not for me"; }
+  return b._st.idx!=null && b._st.idx>0 ? "In progress" : (b._st.lastOpened ? "Reading" : "Not started yet");
+}
+async function setStatus(b,status){
+  const s=await store.getState(b.id)||{id:b.id};
+  s.status=status;
+  if(status==="completed") s.completedAt=Date.now(); else delete s.completedAt;
+  delete s.completed; // drop the legacy flag
+  await store.putState(s);
+  renderBooks();
+}
+
+// status switcher: a small select so you can move between the three states (and undo)
+function statusSwitcher(b){
+  const sel=document.createElement("select"); sel.className="statussel"; sel.setAttribute("aria-label","Change reading status for "+(b.title||"book"));
+  [["reading","Reading"],["completed","Completed"],["notforme","Not for me"]].forEach(([v,l])=>{
+    const o=document.createElement("option"); o.value=v; o.textContent=l; sel.appendChild(o);
+  });
+  sel.value=statusOf(b);
+  sel.onclick=e=>e.stopPropagation();
+  sel.onchange=e=>{ e.stopPropagation(); setStatus(b,sel.value); };
+  return sel;
+}
+
+// gallery card
+function bookCard(b,isRecent){
+  const wrap=document.createElement("div"); wrap.className="book";
+  wrap.appendChild(coverEl(b,false));
+  const meta=document.createElement("div"); meta.className="bookmeta";
+  const bt=document.createElement("div"); bt.className="bt"; bt.textContent=b.title||"Untitled";
+  const st=document.createElement("div"); st.className="status"; st.textContent=bookStatus(b);
+  meta.appendChild(bt); meta.appendChild(st);
+  if(!isRecent){
+    meta.appendChild(statusSwitcher(b));
+    if(statusOf(b)==="completed"){
+      meta.appendChild(starsEl(b));
+      meta.appendChild(commentEl(b));
+    }
+    meta.appendChild(removeBtn(b));
+  }
+  wrap.appendChild(meta);
+  return wrap;
+}
+
+// list row
+function bookRow(b){
+  const row=document.createElement("div"); row.className="bookrow";
+  row.appendChild(coverEl(b,true));
+  const info=document.createElement("div"); info.className="info";
+  const bt=document.createElement("div"); bt.className="bt"; bt.textContent=b.title||"Untitled";
+  const st=document.createElement("div"); st.className="status"; st.textContent=bookStatus(b);
+  info.appendChild(bt); info.appendChild(st);
+  if(statusOf(b)==="completed") info.appendChild(commentEl(b));
+  const right=document.createElement("div"); right.className="rightcol";
+  right.appendChild(statusSwitcher(b));
+  if(statusOf(b)==="completed") right.appendChild(starsEl(b));
+  right.appendChild(removeBtn(b));
+  row.appendChild(info); row.appendChild(right);
+  return row;
+}
+
+function removeBtn(b){
+  const btn=document.createElement("button"); btn.className="remove"; btn.textContent="Remove";
+  btn.setAttribute("aria-label","Remove "+(b.title||"book")+" from library");
+  btn.onclick=async(e)=>{ e.stopPropagation(); if(!confirm(`Remove "${b.title}" from your library? Your backup file is unaffected.`)) return; await store.delBook(b.id); renderBooks(); renderDashboard(); };
+  return btn;
+}
+function starsEl(b){
+  const wrap=document.createElement("div"); wrap.className="stars"; wrap.setAttribute("role","group"); wrap.setAttribute("aria-label","Rate this book");
+  const rating=b._st.rating||0;
+  for(let i=1;i<=5;i++){
+    const s=document.createElement("button"); s.type="button"; s.textContent="★";
+    s.className=i<=rating?"on":""; s.setAttribute("aria-label",`${i} star${i>1?"s":""}`); s.setAttribute("aria-pressed",i<=rating);
+    s.onclick=async(e)=>{ e.stopPropagation(); const st=await store.getState(b.id)||{id:b.id}; st.rating=(st.rating===i?0:i); await store.putState(st); renderBooks(); };
+    wrap.appendChild(s);
+  }
+  return wrap;
+}
+function commentEl(b){
+  const c=document.createElement("div");
+  if(b._st.comment){ c.className="comment"; c.textContent="“"+b._st.comment+"”"; }
+  else { c.className="comment empty"; c.textContent="+ add a one-line thought"; }
+  c.setAttribute("role","button"); c.tabIndex=0; c.setAttribute("aria-label","Edit your one-line comment");
+  const edit=async(e)=>{ e&&e.stopPropagation(); const txt=prompt("Your one-line thought about this book:",b._st.comment||""); if(txt===null) return; const st=await store.getState(b.id)||{id:b.id}; st.comment=txt.trim().slice(0,140); await store.putState(st); renderBooks(); };
+  c.onclick=edit; c.onkeydown=(e)=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();edit(e);} };
+  return c;
+}
+
+/* keep renderShelf as an alias so existing callers still work */
+async function renderShelf(){ await renderHome(); }
+
 
 /* ---------- (4b) Backup: export / import everything ---------- */
 function bufToB64(buf){
@@ -638,7 +1008,7 @@ async function saveState(){
   prev.when=Date.now();
   await store.putState(prev);
 }
-function goHome(){ reader.classList.remove("active"); library.style.display="block"; document.body.classList.remove("reading"); bookTitle.textContent="Bilingual Reader"; current=null; closePanel(); renderShelf(); }
+async function goHome(){ await stopReadingTimer(); reader.classList.remove("active"); library.style.display="block"; document.body.classList.remove("reading"); bookTitle.textContent="Bilingual Reader"; current=null; closePanel(); await renderHome(); }
 async function step(d){ if(!current)return; const n=current.idx+d; if(n<0||n>=current.chapters.length)return; current.idx=n; await renderChapter(); markCurrentToc(); }
 async function gotoChapter(i){ if(!current||i<0||i>=current.chapters.length)return; current.idx=i; await renderChapter(); markCurrentToc(); closePanel(); }
 
@@ -751,7 +1121,8 @@ function announce(msg){ const l=document.getElementById("live"); if(l){ l.textCo
 const $=id=>document.getElementById(id);
 const drop=$("drop"),file=$("file"),modal=$("modal"),pages=$("pages"),pos=$("pos"),
       bookTitle=$("bookTitle"),library=$("library"),reader=$("reader"),
-      shelf=$("shelf"),shelfWrap=$("shelfWrap"),status=$("status"),statusText=$("statusText");
+      shelf=$("shelf"),shelfWrap=$("shelfWrap"),status=$("status"),statusText=$("statusText"),
+      recentWrap=$("recentWrap"),recent=$("recent");
 function showStatus(t){statusText.textContent=t;status.classList.add("show");}
 function hideStatus(){status.classList.remove("show");}
 
@@ -847,7 +1218,26 @@ const savedTheme=localStorage.getItem("theme")||(matchMedia("(prefers-color-sche
 document.body.dataset.theme=savedTheme; themeSel.value=savedTheme;
 themeSel.onchange=()=>{document.body.dataset.theme=themeSel.value;localStorage.setItem("theme",themeSel.value);};
 
-renderShelf();
+// sort + view toggle + goal
+$("sortSel").onchange=()=>{ _sort=$("sortSel").value; renderBooks(); };
+$("coverSel").onchange=()=>{ _coverStyle=$("coverSel").value; localStorage.setItem("coverStyle",_coverStyle); renderBooks(); };
+_coverStyle=localStorage.getItem("coverStyle")||"art";
+$("coverSel").value=_coverStyle;
+function setShelfView(v){
+  _view=v;
+  $("gBtn").classList.toggle("active",v==="gallery"); $("gBtn").setAttribute("aria-pressed",v==="gallery");
+  $("lBtn").classList.toggle("active",v==="list"); $("lBtn").setAttribute("aria-pressed",v==="list");
+  localStorage.setItem("shelfView",v);
+  renderBooks();
+}
+$("gBtn").onclick=()=>setShelfView("gallery");
+$("lBtn").onclick=()=>setShelfView("list");
+_view=localStorage.getItem("shelfView")||"gallery";
+$("gBtn").classList.toggle("active",_view==="gallery"); $("gBtn").setAttribute("aria-pressed",_view==="gallery");
+$("lBtn").classList.toggle("active",_view==="list"); $("lBtn").setAttribute("aria-pressed",_view==="list");
+wireGoalInput();
+
+renderHome();
 
 // startup check: make sure the EPUB engine actually loaded
 if(typeof ePub==="undefined"){
