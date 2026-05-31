@@ -14,7 +14,7 @@
     --paper:#faf8f3;
     --ink:#1c1b19;
     --ink-soft:#5b5750;
-    --ink-faint:#8f897e;
+    --ink-faint:#706a5e;
     --rule:#e7e1d6;
     --accent:#b5562f;          /* restrained warm accent */
     --zh:#2f2a24;              /* chinese column ink, slightly distinct */
@@ -27,11 +27,11 @@
     --lh:1.7;
   }
   [data-theme="sepia"]{
-    --paper:#f4ecd8; --ink:#3b3228; --ink-soft:#6b5d49; --rule:#e0d4ba;
+    --paper:#f4ecd8; --ink:#3b3228; --ink-soft:#6b5d49; --ink-faint:#6f6552; --rule:#e0d4ba;
     --panel:#f8f1e0; --zh:#3b3228;
   }
   [data-theme="dark"]{
-    --paper:#1a1815; --ink:#e9e4da; --ink-soft:#a59f93; --ink-faint:#766f63;
+    --paper:#1a1815; --ink:#e9e4da; --ink-soft:#a59f93; --ink-faint:#948e80;
     --rule:#33302a; --accent:#e08a5f; --zh:#e9e4da; --panel:#211e1a;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
   }
@@ -494,7 +494,7 @@ async function renderChapter(){
     const row=document.createElement("div"); row.className="seg";
     const en=document.createElement("div"); en.className="col en";
     const enEl=document.createElement(s.tag); enEl.textContent=s.text; en.appendChild(enEl);
-    const zh=document.createElement("div"); zh.className="col zh";
+    const zh=document.createElement("div"); zh.className="col zh"; zh.lang="zh-CN";
     const zhEl=document.createElement(s.tag); zhEl.className="pending"; zhEl.textContent="译文"; zh.appendChild(zhEl);
     row.appendChild(en); row.appendChild(zh);
     row.tabIndex=0; row.setAttribute("role","button"); row.setAttribute("aria-label","Highlight this paragraph pair");
@@ -793,7 +793,7 @@ $("homeBtn").onclick=goHome;
 $("menuBtn").onclick=openPanel;$("panelClose").onclick=closePanel;
 $("panelBg").onclick=closePanel;
 $("bmAdd").onclick=addBookmark;
-document.querySelectorAll(".ptab").forEach(tab=>{
+document.querySelectorAll(".ptab").forEach((tab,i,all)=>{
   tab.onclick=()=>{
     document.querySelectorAll(".ptab").forEach(t=>{t.classList.remove("active");t.setAttribute("aria-selected","false");});
     tab.classList.add("active"); tab.setAttribute("aria-selected","true");
@@ -801,6 +801,13 @@ document.querySelectorAll(".ptab").forEach(tab=>{
     $("tabToc").style.display=which==="toc"?"block":"none";
     $("tabBm").style.display=which==="bm"?"block":"none";
     if(which==="bm") buildBookmarks();
+  };
+  tab.onkeydown=e=>{
+    if(e.key==="ArrowRight"||e.key==="ArrowLeft"){
+      e.preventDefault();
+      const next=all[(i+(e.key==="ArrowRight"?1:all.length-1))%all.length];
+      next.focus(); next.click();
+    }
   };
 });
 
