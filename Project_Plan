@@ -1,0 +1,181 @@
+# Bilingual EPUB Reader — Project Plan & Handoff Spec
+
+> A single self-contained HTML file that opens English EPUBs on your Mac and shows
+> English (left) + Chinese (right), side by side. Everything stays on your device.
+> Built for one user, by that user. No server, no login, no cost.
+
+---
+
+## 1. The one-paragraph summary (read this first)
+
+I want a **single `index.html` file** I open in my browser. I drag in an `.epub`.
+It shows **English on the left, Chinese on the right** in two columns, always both
+visible — never hide either language. Chinese is for grabbing the gist fast and
+finding the parts worth reading deeply in English. The Chinese comes from **free
+Google machine translation** (gist-quality is fine and correct for this purpose).
+**Per book**, I choose either *translate-as-I-read* (instant, needs internet) or
+*translate-the-whole-book-once-and-save* (wait once, then offline + private).
+All data — books, reading position, reading list — lives **only on my device** in
+the browser's IndexedDB. My **GitHub repo holds only the tool's code, never a single
+book or note.** The look and feel should evoke **Apple Books / Safari Reader**:
+clean serif body type, generous whitespace, calm, accessible.
+
+---
+
+## 2. Why this shape (the reasoning, so any AI understands the constraints)
+
+The bilingual-ebook world on GitHub splits into TWO jobs that are almost never
+combined: **(A) translating** an EPUB into a bilingual file (CLI/AI tools like
+`bilingual_book_maker`, `epub-translator`, `epubtrans`) and **(B) reading** it
+side-by-side (`epub.js`, `jorkens`, `tomparys/bilingual-reader`). This tool
+deliberately does BOTH inside one browser file, using the free translation endpoint
+so there is no API key — which matters because **a static HTML file cannot keep
+secrets**, so a key-based design was off the table from the start.
+
+Key constraints that drove the design:
+- **"Open file, read, close"** → no server, no app, no build step. Just a file.
+- **"Everything private"** → books and notes never leave the device; only the empty
+  tool goes on GitHub.
+- **"Free translation"** → Google's free web endpoint; no key to hide.
+- **"Host on GitHub"** → the repo is the *tool*; the *library* is your Mac.
+
+---
+
+## 3. Locked decisions (do not re-litigate these)
+
+| Decision | Choice | Why |
+|---|---|---|
+| Input format | **EPUB only** | MOBI is proprietary/binary; converting it in-browser is fragile. Convert MOBI→EPUB in **Calibre** (10 seconds). Tool shows a one-line reminder. |
+| Layout | **Two columns: English left, Chinese right** | Matches the original sketch. |
+| Translation source | **Free Google translate endpoint** (no key) | Gist-quality is the *correct* tool for "understand fast, then read English deeply." |
+| Translation timing | **Per-book choice**: live OR translate-once-and-save | User picks at open time. |
+| Storage | **IndexedDB** (not localStorage) | localStorage caps ~5MB; a saved book blows past that. IndexedDB holds many books. |
+| Reader engine | **epub.js** + **JSZip** | Standard, battle-tested. Never rebuild this wheel. |
+| Privacy | Books + data on device only; GitHub = code only | Both privacy concerns satisfied at once. |
+| Build style | Incremental, testable stages | ADHD-friendly: see progress fast, never one giant untestable blob. |
+
+---
+
+## 4. Privacy model (important — this is the whole point)
+
+- The HTML file and any libraries (epub.js, JSZip) are the ONLY things in the GitHub repo.
+- When you open a book, it is read **locally** and stored in **your browser's IndexedDB**.
+  It never uploads anywhere.
+- **One exception to flag honestly:** when translating, the *text of each paragraph*
+  is sent to Google's translate endpoint over the internet (the file itself never is).
+  Once a book is translated-and-saved, no further network calls happen for it — it's
+  fully offline and private after that.
+- A `.gitignore` will explicitly block any book or data file from ever being committed,
+  as a belt-and-suspenders safeguard.
+
+---
+
+## 5. Features
+
+### Must-have (v1)
+1. **Open EPUB** — drag-and-drop or file picker.
+2. **Two-column bilingual view** — English left, Chinese right, paragraph-aligned, both always visible.
+3. **Per-book translation mode** — choose *live* or *translate-once-and-save* when opening.
+4. **Translation cache** — never translate the same paragraph twice.
+5. **Reading position memory** — reopen a book, land where you left off.
+6. **Reading list / library** — your opened books, with covers, on a shelf.
+7. **Apple-style reading UX** — see section 6.
+8. **MOBI reminder note** — one line telling you to convert in Calibre.
+
+### Nice-to-have (later, only if wanted)
+- Adjustable font size / line spacing / theme (light / sepia / dark).
+- Tap a sentence to highlight its translation pair.
+- Search within book.
+- Export/backup your library & notes to a file (since it's all local).
+- Click an English word for a quick dictionary pop (the `jorkens` idea).
+
+### Explicitly OUT of scope
+- MOBI direct support, accounts, cloud sync, multi-user, paid AI translation.
+
+---
+
+## 6. UX / design direction (Apple Books + Safari Reader)
+
+- **Type:** serif body (e.g. New York / Georgia / "Iowan"), generous line-height (~1.6),
+  comfortable measure (~66 chars per column).
+- **Color:** off-white / warm paper background, soft grays, one restrained accent.
+  Sepia and dark themes optional.
+- **Chrome:** minimal. Toolbar hides while reading, reappears on hover/scroll-up
+  (Safari Reader behavior).
+- **Motion:** gentle, quick. No bounce, no flash.
+- **The two columns** scroll together and stay paragraph-aligned.
+
+### Accessibility (WCAG 2.1 AA target)
+- Full keyboard navigation; visible focus rings.
+- Real semantic HTML + ARIA where needed; screen-reader sensible.
+- Contrast ≥ 4.5:1 for body text in every theme.
+- Respect `prefers-reduced-motion` and `prefers-color-scheme`.
+- User-controllable font size; nothing breaks when text is enlarged 200%.
+
+---
+
+## 7. Technical stack
+
+- **Pure front-end, single file** (`index.html`) — HTML + CSS + JS, no build step.
+- **epub.js** — parse & render EPUB (loaded from a CDN, or vendored locally for offline).
+- **JSZip** — dependency epub.js uses to open the EPUB zip.
+- **IndexedDB** — store books, translation cache, reading position, reading list.
+  Wrapped in a tiny helper so the complexity is hidden.
+- **Translation** — `fetch()` to the free Google translate endpoint, one request per
+  paragraph, results cached in IndexedDB keyed by source text hash.
+
+### Known risks to handle
+- Google free endpoint can rate-limit → batch/queue requests, add gentle retry,
+  show a calm "translating…" state, and always keep the cache so you never re-hit it.
+- Some EPUBs have messy HTML → render defensively, never crash the whole page.
+- Large saved books → IndexedDB handles it; show storage usage somewhere small.
+
+---
+
+## 8. Build stages (incremental — each stage is testable on its own)
+
+1. **Skeleton + open EPUB** — single file opens an EPUB and shows the English text
+   (one column). Proves epub.js + file loading work. *Test: I can read a book in English.*
+2. **Two-column layout** — add the right column, paragraph-aligned, both always visible.
+   *Test: English left, empty Chinese right, scroll together.*
+3. **Live translation** — fill the right column via Google, with caching + loading states.
+   *Test: Chinese appears as I read; second visit is instant.*
+4. **Persistence** — IndexedDB for reading position + the translation cache.
+   *Test: close & reopen, land where I left off, no re-translating.*
+5. **Library / reading list** — a shelf of opened books with covers.
+   *Test: my books show up; click to resume.*
+6. **Translate-once-and-save mode** — full-book translation stored for offline.
+   *Test: pick this mode, wait once, then read offline.*
+7. **Apple polish + accessibility pass** — themes, type, focus, reduced-motion, contrast.
+   *Test: looks like Apple Books; keyboard + screen reader OK.*
+
+> Each stage produces a working file. We stop and test before the next. This is the
+> "ask before large tokens" checkpoint: I approve each stage.
+
+---
+
+## 9. How to publish on GitHub (privacy-safe)
+
+1. New repo, e.g. `bilingual-reader`. Put ONLY `index.html` (+ vendored libs) in it.
+2. Add a `.gitignore` blocking `*.epub`, `*.mobi`, and any data/backup files.
+3. (Optional) Enable GitHub Pages to open it from any browser — but note: books still
+   live in *that browser's* IndexedDB, so each device has its own private library.
+4. Never commit a book. The repo stays a clean, shareable, empty tool.
+
+---
+
+## 10. Reference projects (don't rebuild these — borrow ideas)
+
+- **epub.js** — the reading engine everyone uses. Use it.
+- **tomparys/bilingual-reader** — parallel two-panel reading (concept reference).
+- **jorkens** — tap-a-word dictionary lookup for learners (nice-to-have idea).
+- **bilingual_book_maker / epub-translator / epubtrans** — how others do EPUB
+  translation; useful if we ever want a "save bilingual EPUB" export.
+
+---
+
+## 11. Open questions for future-me (not blocking v1)
+
+- Do I want the tap-a-word dictionary (great for learning goal #1)?
+- Do I want a backup/export so my local library survives a browser wipe?
+- Do I want sepia/dark themes from day one or later?
