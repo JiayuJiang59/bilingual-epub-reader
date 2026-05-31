@@ -1,0 +1,11 @@
+# --- Privacy guard: NEVER commit books or reading data ---
+*.epub
+*.mobi
+*.azw
+*.azw3
+# any local backups/exports you might make later
+backup*.json
+*.bak
+# OS noise
+.DS_Store
+Thumbs.db

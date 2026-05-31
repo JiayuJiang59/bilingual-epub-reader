@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bilingual Reader</title>
+<!-- epub.js + JSZip: the standard, battle-tested EPUB engine. We do not rebuild this wheel. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.3.93/epub.min.js"></script>
+<style>
+  /* ---------- THEME TOKENS (Apple Books / Safari Reader flavor) ---------- */
+  :root{
+    --paper:#faf8f3;
+    --ink:#1c1b19;
+    --ink-soft:#5b5750;
+    --ink-faint:#8f897e;
+    --rule:#e7e1d6;
+    --accent:#b5562f;          /* restrained warm accent */
+    --zh:#2f2a24;              /* chinese column ink, slightly distinct */
+    --panel:#fffdf8;
+    --shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.06);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+    --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;
+    --measure:34rem;
+    --fs:1.125rem;
+    --lh:1.7;
+  }
+  [data-theme="sepia"]{
+    --paper:#f4ecd8; --ink:#3b3228; --ink-soft:#6b5d49; --rule:#e0d4ba;
+    --panel:#f8f1e0; --zh:#3b3228;
+  }
+  [data-theme="dark"]{
+    --paper:#1a1815; --ink:#e9e4da; --ink-soft:#a59f93; --ink-faint:#766f63;
+    --rule:#33302a; --accent:#e08a5f; --zh:#e9e4da; --panel:#211e1a;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--serif);
+    -webkit-font-smoothing:antialiased;
+    transition:background .3s ease,color .3s ease;
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+
+  /* ---------- TOP BAR ---------- */
+  .bar{
+    position:sticky;top:0;z-index:40;
+    display:flex;align-items:center;gap:.75rem;
+    padding:.6rem 1rem;
+    background:color-mix(in srgb,var(--paper) 88%,transparent);
+    backdrop-filter:saturate(180%) blur(20px);
+    -webkit-backdrop-filter:saturate(180%) blur(20px);
+    border-bottom:1px solid var(--rule);
+    font-family:var(--ui);
+  }
+  .bar .title{font-weight:600;font-size:.95rem;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;color:var(--ink);}
+  .bar.hidden{transform:translateY(-100%);transition:transform .3s ease;}
+  button,select{font-family:var(--ui);}
+  .btn{
+    appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--ink);
+    border-radius:.6rem;padding:.4rem .7rem;font-size:.85rem;cursor:pointer;
+    display:inline-flex;align-items:center;gap:.35rem;transition:background .15s,border-color .15s;
+  }
+  .btn:hover{border-color:var(--accent);}
+  .btn:focus-visible,select:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;}
+  .btn.ghost{border-color:transparent;background:transparent;}
+  select.btn{padding-right:.5rem;}
+
+  /* ---------- LIBRARY / SHELF ---------- */
+  .wrap{max-width:1100px;margin:0 auto;padding:2rem 1.25rem 6rem;}
+  .hero{text-align:center;padding:3rem 1rem 1.5rem;}
+  .hero h1{font-size:2.4rem;margin:.2rem 0;font-weight:600;letter-spacing:-.01em;}
+  .hero p{color:var(--ink-soft);font-family:var(--ui);font-size:1rem;max-width:32rem;margin:.4rem auto;}
+  .drop{
+    margin:1.5rem auto;max-width:36rem;border:2px dashed var(--rule);border-radius:1rem;
+    padding:2.5rem 1.5rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;
+    font-family:var(--ui);color:var(--ink-soft);background:var(--panel);
+  }
+  .drop.drag{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel));}
+  .note{font-family:var(--ui);font-size:.8rem;color:var(--ink-faint);text-align:center;margin-top:1rem;}
+  .note code{background:var(--rule);padding:.05rem .35rem;border-radius:.3rem;}
+
+  .shelf-title{font-family:var(--ui);font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin:2rem 0 .75rem;}
+  .shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:1.25rem;}
+  .card{cursor:pointer;text-align:left;border:none;background:none;padding:0;}
+  .cover{
+    aspect-ratio:2/3;border-radius:.4rem;background:var(--panel);box-shadow:var(--shadow);
+    display:flex;align-items:flex-end;padding:.6rem;overflow:hidden;position:relative;
+    transition:transform .18s ease;
+  }
+  .card:hover .cover{transform:translateY(-3px);}
+  .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .cover .fallback{font-family:var(--serif);font-size:.85rem;color:var(--ink);line-height:1.3;position:relative;z-index:1;}
+  .card .meta{font-family:var(--ui);font-size:.78rem;color:var(--ink-soft);margin-top:.4rem;line-height:1.3;}
+  .card .del{font-family:var(--ui);font-size:.7rem;color:var(--ink-faint);margin-top:.15rem;}
+  .card .del:hover{color:var(--accent);}
+
+  /* ---------- READER ---------- */
+  #reader{display:none;}
+  #reader.active{display:block;}
+  .pages{max-width:var(--measure-wrap,72rem);margin:0 auto;padding:2.5rem 1.25rem 8rem;}
+  .seg{
+    display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;align-items:start;
+    padding:.1rem 0;border-radius:.5rem;
+  }
+  .seg.hl{background:color-mix(in srgb,var(--accent) 7%,transparent);}
+  .col{font-size:var(--fs);line-height:var(--lh);}
+  .col.en{color:var(--ink);}
+  .col.zh{color:var(--zh);font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",var(--serif);}
+  .col h1,.col h2,.col h3{font-weight:600;line-height:1.25;margin:1.6rem 0 .6rem;}
+  .col p{margin:0 0 1.05rem;}
+  .col.zh .pending{color:var(--ink-faint);font-style:italic;}
+  .col.zh .pending::after{content:" …";}
+  .chapter-head{grid-column:1/-1;border-top:1px solid var(--rule);margin:2rem 0 .5rem;padding-top:1.5rem;font-family:var(--ui);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);}
+
+  .nav{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    display:flex;align-items:center;justify-content:center;gap:1rem;
+    padding:.75rem;font-family:var(--ui);
+    background:color-mix(in srgb,var(--paper) 88%,transparent);
+    backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+    border-top:1px solid var(--rule);
+  }
+  .nav .pos{font-size:.8rem;color:var(--ink-soft);min-width:8rem;text-align:center;}
+
+  /* progress / status pill */
+  .status{
+    position:fixed;top:3.5rem;left:50%;transform:translateX(-50%);z-index:50;
+    font-family:var(--ui);font-size:.8rem;color:var(--ink);
+    background:var(--panel);border:1px solid var(--rule);border-radius:2rem;
+    padding:.4rem .9rem;box-shadow:var(--shadow);display:none;align-items:center;gap:.5rem;
+  }
+  .status.show{display:inline-flex;}
+  .spin{width:.85rem;height:.85rem;border:2px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+
+  /* mode dialog */
+  .modal-bg{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:1rem;}
+  .modal-bg.show{display:flex;}
+  .modal{background:var(--panel);border-radius:1rem;box-shadow:var(--shadow);max-width:26rem;width:100%;padding:1.5rem;font-family:var(--ui);}
+  .modal h2{font-family:var(--serif);margin:.2rem 0 .3rem;font-size:1.3rem;}
+  .modal p{color:var(--ink-soft);font-size:.9rem;margin:.2rem 0 1rem;}
+  .choice{display:block;width:100%;text-align:left;border:1px solid var(--rule);background:var(--paper);border-radius:.7rem;padding:.85rem 1rem;margin-bottom:.6rem;cursor:pointer;transition:border-color .15s;}
+  .choice:hover{border-color:var(--accent);}
+  .choice b{display:block;font-size:.95rem;color:var(--ink);}
+  .choice span{font-size:.8rem;color:var(--ink-soft);}
+
+  @media (max-width:760px){
+    .seg{grid-template-columns:1fr;gap:.4rem;}
+    .col.zh{padding-bottom:.8rem;border-bottom:1px solid var(--rule);margin-bottom:.8rem;}
+    .hero h1{font-size:1.9rem;}
+  }
+</style>
+</head>
+<body data-theme="light">
+
+<!-- ===================== TOP BAR ===================== -->
+<header class="bar" id="bar">
+  <button class="btn ghost" id="homeBtn" title="Library" aria-label="Library">☰ Library</button>
+  <span class="title" id="bookTitle">Bilingual Reader</span>
+  <button class="btn ghost" id="aMinus" aria-label="Smaller text">A−</button>
+  <button class="btn ghost" id="aPlus" aria-label="Larger text">A+</button>
+  <select class="btn" id="theme" aria-label="Theme">
+    <option value="light">Light</option>
+    <option value="sepia">Sepia</option>
+    <option value="dark">Dark</option>
+  </select>
+</header>
+
+<div class="status" id="status"><span class="spin"></span><span id="statusText">Translating…</span></div>
+
+<!-- ===================== LIBRARY ===================== -->
+<main class="wrap" id="library">
+  <div class="hero">
+    <h1>Bilingual Reader</h1>
+    <p>English on the left, Chinese on the right. Everything stays on this device — nothing is ever uploaded.</p>
+  </div>
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Open an EPUB file">
+    <strong>Drop an EPUB here</strong><br>or click to choose a file
+    <input type="file" id="file" accept=".epub" hidden>
+  </div>
+  <p class="note">EPUB only. Have a MOBI? Convert it to EPUB in <code>Calibre</code> (free) — drag the file in, right-click → Convert → EPUB.</p>
+
+  <div id="shelfWrap" style="display:none;">
+    <div class="shelf-title">Your books</div>
+    <div class="shelf" id="shelf"></div>
+  </div>
+</main>
+
+<!-- ===================== READER ===================== -->
+<section id="reader">
+  <div class="pages" id="pages"></div>
+  <div class="nav">
+    <button class="btn" id="prev">‹ Prev</button>
+    <span class="pos" id="pos">—</span>
+    <button class="btn" id="next">Next ›</button>
+  </div>
+</section>
+
+<!-- ===================== MODE MODAL ===================== -->
+<div class="modal-bg" id="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle">How should we translate this book?</h2>
+    <p>You can change your mind later — translations are always cached so nothing is re-done.</p>
+    <button class="choice" data-mode="live">
+      <b>Translate as I read</b>
+      <span>Instant start. Each paragraph is translated when you reach it. Needs internet.</span>
+    </button>
+    <button class="choice" data-mode="save">
+      <b>Translate the whole book once, then save</b>
+      <span>Wait once up front, then it's instant and fully offline & private forever after.</span>
+    </button>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   BILINGUAL READER  —  single-file, fully local.
+   Sections:  (1) IndexedDB store  (2) Translation  (3) EPUB load + render
+              (4) Library/shelf    (5) Reader nav    (6) UI controls
+   ========================================================================= */
+
+/* ---------- (1) IndexedDB: hidden behind a tiny helper ---------- */
+const DB_NAME="bilingual-reader", DB_VER=1;
+let _db=null;
+function db(){
+  if(_db) return Promise.resolve(_db);
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(DB_NAME,DB_VER);
+    r.onupgradeneeded=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains("books"))  d.createObjectStore("books",{keyPath:"id"});
+      if(!d.objectStoreNames.contains("trans"))  d.createObjectStore("trans");       // key: hash -> zh text
+      if(!d.objectStoreNames.contains("state"))  d.createObjectStore("state",{keyPath:"id"}); // reading position etc.
+    };
+    r.onsuccess=()=>{_db=r.result;res(_db);};
+    r.onerror=()=>rej(r.error);
+  });
+}
+function tx(store,mode,fn){
+  return db().then(d=>new Promise((res,rej)=>{
+    const t=d.transaction(store,mode), s=t.objectStore(store);
+    const out=fn(s);
+    t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out);
+    t.onerror=()=>rej(t.error);
+  }));
+}
+const store={
+  putBook:b=>tx("books","readwrite",s=>s.put(b)),
+  getBook:id=>tx("books","readonly",s=>s.get(id)),
+  allBooks:()=>tx("books","readonly",s=>s.getAll()),
+  delBook:id=>tx("books","readwrite",s=>s.delete(id)),
+  getTrans:k=>tx("trans","readonly",s=>s.get(k)),
+  putTrans:(k,v)=>tx("trans","readwrite",s=>s.put(v,k)),
+  putState:o=>tx("state","readwrite",s=>s.put(o)),
+  getState:id=>tx("state","readonly",s=>s.get(id)),
+};
+function hash(str){let h=5381;for(let i=0;i<str.length;i++)h=((h<<5)+h+str.charCodeAt(i))>>>0;return "t"+h;}
+
+/* ---------- (2) Translation: free Google endpoint, cached, queued ---------- */
+async function translate(text){
+  const t=text.trim(); if(!t) return "";
+  const key=hash(t);
+  const cached=await store.getTrans(key);
+  if(cached!=null) return cached;
+  try{
+    const url="https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q="+encodeURIComponent(t);
+    const r=await fetch(url);
+    if(!r.ok) throw new Error("rate");
+    const data=await r.json();
+    const zh=(data[0]||[]).map(seg=>seg[0]).join("");
+    await store.putTrans(key,zh);
+    return zh;
+  }catch(e){
+    return null; // signal: failed, keep original visible, allow retry
+  }
+}
+// gentle sequential queue so we don't get rate-limited
+let _q=Promise.resolve();
+function queueTranslate(text){ const p=_q.then(()=>translate(text)); _q=p.catch(()=>{}); return p; }
+
+/* ---------- (3) EPUB load + parse into aligned segments ---------- */
+let current=null; // {id,title,book,chapters:[{href,label}], idx, mode}
+
+async function openFromFile(file){
+  const buf=await file.arrayBuffer();
+  const id=hash(file.name+file.size);
+  let rec=await store.getBook(id);
+  if(!rec){
+    rec={id,name:file.name,data:buf,added:Date.now(),mode:null,cover:null,title:file.name.replace(/\.epub$/i,"")};
+    // try to pull title + cover
+    const probe=ePub(buf);
+    try{
+      await probe.ready;
+      const md=await probe.loaded.metadata; if(md&&md.title) rec.title=md.title;
+      try{ const c=await probe.coverUrl(); if(c){ rec.cover=await blobToDataURL(await (await fetch(c)).blob()); } }catch(_){}
+    }catch(_){}
+    await store.putBook(rec);
+  }
+  if(!rec.mode){ askMode(rec); } else { loadBook(rec); }
+}
+function blobToDataURL(b){return new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b);});}
+
+function askMode(rec){
+  modal.classList.add("show");
+  modal.querySelectorAll(".choice").forEach(btn=>{
+    btn.onclick=async()=>{
+      rec.mode=btn.dataset.mode;
+      await store.putBook(rec);
+      modal.classList.remove("show");
+      loadBook(rec);
+    };
+  });
+}
+
+async function loadBook(rec){
+  current={id:rec.id,title:rec.title,mode:rec.mode,book:ePub(rec.data),chapters:[],idx:0};
+  bookTitle.textContent=rec.title;
+  library.style.display="none"; reader.classList.add("active");
+  await current.book.ready;
+  // build a flat chapter list from the spine
+  current.chapters=current.book.spine.spineItems.map(it=>({href:it.href,id:it.idref}));
+  const st=await store.getState(rec.id);
+  current.idx=(st&&st.idx)||0;
+  await renderChapter();
+  if(rec.mode==="save") prefetchWholeBook(rec); // background full translation
+}
+
+async function chapterSegments(href){
+  // load the chapter html, split into block-level segments preserving headings
+  const item=current.book.spine.get(href);
+  await item.load(current.book.load.bind(current.book));
+  const doc=item.document;
+  const out=[];
+  const blocks=doc.body?doc.body.querySelectorAll("h1,h2,h3,h4,p,li,blockquote"):[];
+  blocks.forEach(el=>{
+    const txt=el.textContent.replace(/\s+/g," ").trim();
+    if(txt) out.push({tag:/^h[1-4]$/i.test(el.tagName)?el.tagName.toLowerCase():"p",text:txt});
+  });
+  item.unload();
+  if(!out.length) out.push({tag:"p",text:"(This section has no readable text.)"});
+  return out;
+}
+
+async function renderChapter(){
+  const href=current.chapters[current.idx].href;
+  pages.innerHTML="";
+  const head=document.createElement("div");
+  head.className="chapter-head";
+  head.textContent=`Section ${current.idx+1} of ${current.chapters.length}`;
+  pages.appendChild(head);
+
+  const segs=await chapterSegments(href);
+  const segEls=[];
+  segs.forEach(s=>{
+    const row=document.createElement("div"); row.className="seg";
+    const en=document.createElement("div"); en.className="col en";
+    const enEl=document.createElement(s.tag); enEl.textContent=s.text; en.appendChild(enEl);
+    const zh=document.createElement("div"); zh.className="col zh";
+    const zhEl=document.createElement(s.tag); zhEl.className="pending"; zhEl.textContent="译文"; zh.appendChild(zhEl);
+    row.appendChild(en); row.appendChild(zh);
+    // tap to pair-highlight (learning aid)
+    row.addEventListener("click",()=>{document.querySelectorAll(".seg.hl").forEach(x=>x.classList.remove("hl"));row.classList.add("hl");});
+    pages.appendChild(row);
+    segEls.push({zhEl,text:s.text});
+  });
+  updatePos();
+  saveState();
+  window.scrollTo({top:0,behavior:"instant"in window?"instant":"auto"});
+
+  // fill translations (cache-first; live mode translates on demand here too)
+  fillTranslations(segEls);
+}
+
+async function fillTranslations(segEls){
+  showStatus("Translating…");
+  let pending=segEls.length;
+  for(const {zhEl,text} of segEls){
+    const zh=await queueTranslate(text);
+    if(zh===null){ zhEl.classList.remove("pending"); zhEl.textContent="（翻译失败，点此重试）"; zhEl.style.color="var(--accent)"; zhEl.style.cursor="pointer";
+      zhEl.onclick=async(e)=>{e.stopPropagation();zhEl.textContent="译文";zhEl.className="pending";const r=await queueTranslate(text);if(r){zhEl.className="";zhEl.textContent=r;}};
+    } else { zhEl.className=""; zhEl.textContent=zh; }
+    pending--;
+  }
+  hideStatus();
+}
+
+// background: translate every chapter so the book is fully offline
+async function prefetchWholeBook(rec){
+  showStatus("Saving full translation…");
+  for(let i=0;i<current.chapters.length;i++){
+    const segs=await chapterSegments(current.chapters[i].href);
+    for(const s of segs){ await queueTranslate(s.text); }
+    statusText.textContent=`Saving full translation… ${Math.round(((i+1)/current.chapters.length)*100)}%`;
+  }
+  hideStatus();
+}
+
+/* ---------- (4) Library / shelf ---------- */
+async function renderShelf(){
+  const books=await store.allBooks();
+  if(!books.length){ shelfWrap.style.display="none"; return; }
+  shelfWrap.style.display="block";
+  shelf.innerHTML="";
+  books.sort((a,b)=>b.added-a.added).forEach(b=>{
+    const card=document.createElement("button"); card.className="card";
+    const cover=document.createElement("div"); cover.className="cover";
+    if(b.cover){const img=new Image();img.src=b.cover;img.alt="";cover.appendChild(img);}
+    else{const f=document.createElement("div");f.className="fallback";f.textContent=b.title;cover.appendChild(f);}
+    const meta=document.createElement("div"); meta.className="meta"; meta.textContent=b.title;
+    const del=document.createElement("div"); del.className="del"; del.textContent="Remove";
+    del.onclick=async(e)=>{e.stopPropagation();await store.delBook(b.id);renderShelf();};
+    card.appendChild(cover);card.appendChild(meta);card.appendChild(del);
+    card.onclick=()=>{ store.getBook(b.id).then(rec=>{ if(!rec.mode)askMode(rec); else loadBook(rec); }); };
+    shelf.appendChild(card);
+  });
+}
+
+/* ---------- (5) Reader navigation + state ---------- */
+function updatePos(){ pos.textContent=`Section ${current.idx+1} / ${current.chapters.length}`; }
+function saveState(){ if(current) store.putState({id:current.id,idx:current.idx,when:Date.now()}); }
+function goHome(){ reader.classList.remove("active"); library.style.display="block"; bookTitle.textContent="Bilingual Reader"; current=null; renderShelf(); }
+async function step(d){ if(!current)return; const n=current.idx+d; if(n<0||n>=current.chapters.length)return; current.idx=n; await renderChapter(); }
+
+/* ---------- (6) UI wiring ---------- */
+const $=id=>document.getElementById(id);
+const drop=$("drop"),file=$("file"),modal=$("modal"),pages=$("pages"),pos=$("pos"),
+      bookTitle=$("bookTitle"),library=$("library"),reader=$("reader"),
+      shelf=$("shelf"),shelfWrap=$("shelfWrap"),status=$("status"),statusText=$("statusText");
+function showStatus(t){statusText.textContent=t;status.classList.add("show");}
+function hideStatus(){status.classList.remove("show");}
+
+drop.onclick=()=>file.click();
+drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();file.click();}};
+file.onchange=e=>{if(e.target.files[0])openFromFile(e.target.files[0]).then(renderShelf);};
+;["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("drag");}));
+;["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("drag");}));
+drop.addEventListener("drop",e=>{const f=[...e.dataTransfer.files].find(f=>/\.epub$/i.test(f.name));if(f)openFromFile(f).then(renderShelf);});
+
+$("prev").onclick=()=>step(-1);
+$("next").onclick=()=>step(1);
+$("homeBtn").onclick=goHome;
+document.addEventListener("keydown",e=>{
+  if(!reader.classList.contains("active"))return;
+  if(e.key==="ArrowRight")step(1);
+  if(e.key==="ArrowLeft")step(-1);
+});
+
+// font size + theme (persisted in localStorage — tiny prefs only, not book data)
+let fs=parseFloat(localStorage.getItem("fs")||"1.125");
+function applyFs(){document.documentElement.style.setProperty("--fs",fs+"rem");localStorage.setItem("fs",fs);}
+$("aPlus").onclick=()=>{fs=Math.min(1.7,fs+0.0625);applyFs();};
+$("aMinus").onclick=()=>{fs=Math.max(0.85,fs-0.0625);applyFs();};
+applyFs();
+const themeSel=$("theme");
+const savedTheme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");
+document.body.dataset.theme=savedTheme; themeSel.value=savedTheme;
+themeSel.onchange=()=>{document.body.dataset.theme=themeSel.value;localStorage.setItem("theme",themeSel.value);};
+
+// hide top bar while scrolling down (Safari Reader behavior)
+let lastY=0;
+addEventListener("scroll",()=>{const y=scrollY;const bar=$("bar");if(y>lastY&&y>120)bar.classList.add("hidden");else bar.classList.remove("hidden");lastY=y;});
+
+renderShelf();
+</script>
+</body>
+</html>
