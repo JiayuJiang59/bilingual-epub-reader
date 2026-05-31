@@ -1,4 +1,6 @@
 # bilingual-epub-reader
+This site is live at https://jiayujiang59.github.io/bilingual-epub-reader/
+
 English–Chinese side-by-side EPUB reader for language learning. Single HTML file, fully local, no server or account.
 
 A single-file, browser-based EPUB reader that shows **English on the left and Chinese on the right**, side by side. Made for language learning: read the Chinese to grasp the gist and find what's worth reading deeply, then read the original English. Everything stays on your device — no server, no account, no cost.
