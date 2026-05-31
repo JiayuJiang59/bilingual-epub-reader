@@ -4,9 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bilingual Reader</title>
-<!-- epub.js + JSZip: the standard, battle-tested EPUB engine. We do not rebuild this wheel. -->
+<!-- epub.js + JSZip: the standard, battle-tested EPUB engine. We do not rebuild this wheel.
+     NOTE: epub.js 0.3.x is on jsDelivr (cdnjs only has 0.2.13). JSZip must load BEFORE epub.js. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.3.93/epub.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
 <style>
   /* ---------- THEME TOKENS (Apple Books / Safari Reader flavor) ---------- */
   :root{
@@ -244,9 +245,11 @@ function db(){
 function tx(store,mode,fn){
   return db().then(d=>new Promise((res,rej)=>{
     const t=d.transaction(store,mode), s=t.objectStore(store);
-    const out=fn(s);
-    t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out);
+    const req=fn(s);               // an IDBRequest
+    req.onsuccess=()=>res(req.result);   // resolve with the actual VALUE
+    req.onerror=()=>rej(req.error);
     t.onerror=()=>rej(t.error);
+    t.onabort=()=>rej(t.error||new Error("transaction aborted"));
   }));
 }
 const store={
@@ -496,6 +499,11 @@ let lastY=0;
 addEventListener("scroll",()=>{const y=scrollY;const bar=$("bar");if(y>lastY&&y>120)bar.classList.add("hidden");else bar.classList.remove("hidden");lastY=y;});
 
 renderShelf();
+
+// startup check: make sure the EPUB engine actually loaded
+if(typeof ePub==="undefined"){
+  reportError("The EPUB engine didn't load — check your internet connection and reload",null);
+}
 </script>
 </body>
 </html>
