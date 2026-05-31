@@ -117,6 +117,10 @@
   .col.zh .pending{color:var(--ink-faint);font-style:italic;}
   .col.zh .pending::after{content:" …";}
   .chapter-head{grid-column:1/-1;border-top:1px solid var(--rule);margin:2rem 0 .5rem;padding-top:1.5rem;font-family:var(--ui);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);}
+  .figure{margin:1.5rem 0;text-align:center;}
+  .figure img{max-width:100%;height:auto;border-radius:.4rem;box-shadow:var(--shadow);}
+  .imgfail{font-family:var(--ui);font-size:.8rem;color:var(--ink-faint);background:var(--panel);border:1px dashed var(--rule);border-radius:.5rem;padding:.7rem 1rem;display:inline-block;}
+  .imgfail code{font-size:.75rem;color:var(--accent);}
 
   .nav{
     position:fixed;left:0;right:0;bottom:0;z-index:40;
@@ -321,7 +325,9 @@ async function loadBook(rec){
   try{
     // fresh copy of the stored buffer (the stored one must stay intact for next time)
     const data=rec.data.slice(0);
-    current={id:rec.id,title:rec.title,mode:rec.mode,book:ePub(data),chapters:[],idx:0};
+    current={id:rec.id,title:rec.title,mode:rec.mode,book:ePub(data),chapters:[],idx:0,zip:null};
+    // open the same EPUB directly with JSZip so we can pull images out ourselves
+    try{ current.zip=await JSZip.loadAsync(rec.data.slice(0)); }catch(_){ current.zip=null; }
     bookTitle.textContent=rec.title;
     library.style.display="none"; reader.classList.add("active");
     await current.book.ready;
@@ -335,19 +341,58 @@ async function loadBook(rec){
 }
 
 async function chapterSegments(href){
-  // load the chapter html, split into block-level segments preserving headings
+  // load the chapter html, walk it in document order capturing text blocks AND images
   const item=current.book.spine.get(href);
   await item.load(current.book.load.bind(current.book));
   const doc=item.document;
   const out=[];
-  const blocks=doc.body?doc.body.querySelectorAll("h1,h2,h3,h4,p,li,blockquote"):[];
-  blocks.forEach(el=>{
-    const txt=el.textContent.replace(/\s+/g," ").trim();
-    if(txt) out.push({tag:/^h[1-4]$/i.test(el.tagName)?el.tagName.toLowerCase():"p",text:txt});
-  });
+  if(doc.body){
+    const nodes=doc.body.querySelectorAll("h1,h2,h3,h4,p,li,blockquote,img,image");
+    for(const el of nodes){
+      const tag=el.tagName.toLowerCase();
+      if(tag==="img"||tag==="image"){
+        // SVG <image> uses xlink:href; normal <img> uses src
+        const raw=el.getAttribute("src")||el.getAttribute("xlink:href")||el.getAttribute("href");
+        if(!raw) continue;
+        const src=await resolveImage(raw,item);
+        out.push({kind:"img",src,alt:el.getAttribute("alt")||"",raw});
+      }else{
+        const txt=el.textContent.replace(/\s+/g," ").trim();
+        if(txt) out.push({kind:"text",tag:/^h[1-4]$/i.test(el.tagName)?el.tagName.toLowerCase():"p",text:txt});
+      }
+    }
+  }
   item.unload();
-  if(!out.length) out.push({tag:"p",text:"(This section has no readable text.)"});
+  if(!out.length) out.push({kind:"text",tag:"p",text:"(This section has no readable text.)"});
   return out;
+}
+
+// pull an image file out of the EPUB zip (via JSZip) and turn it into a blob URL
+const _imgCache={};
+async function resolveImage(rawPath,item){
+  try{
+    if(/^data:/i.test(rawPath)) return rawPath;
+    if(_imgCache[rawPath]) return _imgCache[rawPath];
+    const zip=current.zip;
+    if(!zip) return null;
+    // the image filename, e.g. "figure1.png" (strip any ../ or path prefix)
+    const wanted=rawPath.split("/").pop().split("?")[0];
+    // find the matching entry anywhere in the zip
+    let entry=null;
+    zip.forEach((relPath,file)=>{
+      if(entry) return;
+      if(relPath.split("/").pop()===wanted) entry=file;
+    });
+    if(!entry) return null;
+    const blob=await entry.async("blob");
+    // give the blob a sensible mime type based on extension
+    const ext=(wanted.split(".").pop()||"").toLowerCase();
+    const mime={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",svg:"image/svg+xml",webp:"image/webp"}[ext]||blob.type||"image/png";
+    const typed=blob.type?blob:new Blob([blob],{type:mime});
+    const url=URL.createObjectURL(typed);
+    _imgCache[rawPath]=url;
+    return url;
+  }catch(_){ return null; }
 }
 
 async function renderChapter(){
@@ -361,13 +406,26 @@ async function renderChapter(){
   const segs=await chapterSegments(href);
   const segEls=[];
   segs.forEach(s=>{
+    if(s.kind==="img"){
+      const fig=document.createElement("div");
+      fig.className="figure";
+      if(s.src){
+        const img=document.createElement("img");
+        img.src=s.src; img.alt=s.alt; img.loading="lazy";
+        img.onerror=()=>{fig.innerHTML='<div class="imgfail">🖼 image couldn\'t be displayed</div>';};
+        fig.appendChild(img);
+      }else{
+        fig.innerHTML='<div class="imgfail">🖼 image not found in this book: <code>'+(s.raw||"?")+'</code></div>';
+      }
+      pages.appendChild(fig);
+      return;
+    }
     const row=document.createElement("div"); row.className="seg";
     const en=document.createElement("div"); en.className="col en";
     const enEl=document.createElement(s.tag); enEl.textContent=s.text; en.appendChild(enEl);
     const zh=document.createElement("div"); zh.className="col zh";
     const zhEl=document.createElement(s.tag); zhEl.className="pending"; zhEl.textContent="译文"; zh.appendChild(zhEl);
     row.appendChild(en); row.appendChild(zh);
-    // tap to pair-highlight (learning aid)
     row.addEventListener("click",()=>{document.querySelectorAll(".seg.hl").forEach(x=>x.classList.remove("hl"));row.classList.add("hl");});
     pages.appendChild(row);
     segEls.push({zhEl,text:s.text});
