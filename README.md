@@ -23,7 +23,7 @@ Pure HTML/CSS/JS, no build step. Uses [epub.js](https://github.com/futurepress/e
 This was built collaboratively in a single conversation: a human directed the design through a structured interview (translation approach, privacy model, storage, UX), and **Claude Opus 4.8** (Anthropic's AI model) wrote the code and the plan. It is a **first build that was not tested in a browser by its author** — expect rough edges, most likely occasional rate-limiting from the free translation endpoint (there's a click-to-retry fallback for that). Treat it as a starting point, not finished software.
 
 ## Want to modify it with your own AI?
-See **[PROJECT_PLAN.md](PROJECT_PLAN.md)** in this repo. It's a full handoff spec — every design decision, the reasoning behind it, the build stages, the tech stack, and the known risks — written so you (or any AI assistant) can pick it up cold and extend it. Hand that file to your AI of choice and describe what you want changed.
+See **[PROJECT_PLAN.md](https://github.com/JiayuJiang59/bilingual-epub-reader/blob/main/PROJECT_PLAN)** in this repo. It's a full handoff spec — every design decision, the reasoning behind it, the build stages, the tech stack, and the known risks — written so you (or any AI assistant) can pick it up cold and extend it. Hand that file to your AI of choice and describe what you want changed.
 
 ## License
 MIT.
