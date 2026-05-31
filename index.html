@@ -37,8 +37,10 @@
   }
 
   *{box-sizing:border-box;}
-  html,body{margin:0;height:100%;}
+  html{height:100%;}
   body{
+    margin:0;min-height:100%;
+    padding-top:3.25rem;            /* clear the fixed top bar */
     background:var(--paper);
     color:var(--ink);
     font-family:var(--serif);
@@ -49,7 +51,7 @@
 
   /* ---------- TOP BAR ---------- */
   .bar{
-    position:sticky;top:0;z-index:40;
+    position:fixed;top:0;left:0;right:0;z-index:40;
     display:flex;align-items:center;gap:.75rem;
     padding:.6rem 1rem;
     background:color-mix(in srgb,var(--paper) 88%,transparent);
@@ -83,6 +85,7 @@
   }
   .drop.drag{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel));}
   .note{font-family:var(--ui);font-size:.8rem;color:var(--ink-faint);text-align:center;margin-top:1rem;}
+  .backup-row{display:flex;gap:.75rem;justify-content:center;margin-top:2.5rem;flex-wrap:wrap;}
   .note code{background:var(--rule);padding:.05rem .35rem;border-radius:.3rem;}
 
   .shelf-title{font-family:var(--ui);font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin:2rem 0 .75rem;}
@@ -231,6 +234,13 @@
     <div class="shelf-title">Your books</div>
     <div class="shelf" id="shelf"></div>
   </div>
+
+  <div class="backup-row">
+    <button class="btn" id="exportBtn">⬇ Back up everything</button>
+    <button class="btn" id="importBtn">⬆ Restore from backup</button>
+    <input type="file" id="importFile" accept=".json,application/json" hidden>
+  </div>
+  <p class="note">Your library lives only in this browser. Back up to a file so nothing is lost if the browser clears its storage — and to move your books between devices.</p>
 </main>
 
 <!-- ===================== READER ===================== -->
@@ -319,6 +329,10 @@ const store={
   putTrans:(k,v)=>tx("trans","readwrite",s=>s.put(v,k)),
   putState:o=>tx("state","readwrite",s=>s.put(o)),
   getState:id=>tx("state","readonly",s=>s.get(id)),
+  allStates:()=>tx("state","readonly",s=>s.getAll()),
+  // trans has no keyPath, so we need keys + values separately
+  allTransKeys:()=>tx("trans","readonly",s=>s.getAllKeys()),
+  allTransVals:()=>tx("trans","readonly",s=>s.getAll()),
 };
 function hash(str){let h=5381;for(let i=0;i<str.length;i++)h=((h<<5)+h+str.charCodeAt(i))>>>0;return "t"+h;}
 
@@ -542,6 +556,65 @@ async function renderShelf(){
   });
 }
 
+/* ---------- (4b) Backup: export / import everything ---------- */
+function bufToB64(buf){
+  const bytes=new Uint8Array(buf); let bin="";
+  const chunk=0x8000;
+  for(let i=0;i<bytes.length;i+=chunk){ bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk)); }
+  return btoa(bin);
+}
+function b64ToBuf(b64){
+  const bin=atob(b64); const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function exportBackup(){
+  try{
+    showStatus("Preparing backup…");
+    const books=await store.allBooks();
+    const states=await store.allStates();
+    const tKeys=await store.allTransKeys();
+    const tVals=await store.allTransVals();
+    // convert book binary data to base64 so it fits in JSON
+    const booksOut=books.map(b=>({...b,data:b.data?bufToB64(b.data):null}));
+    const trans={}; tKeys.forEach((k,i)=>{ trans[k]=tVals[i]; });
+    const backup={ format:"bilingual-reader-backup", version:1, when:Date.now(), books:booksOut, states, trans };
+    const blob=new Blob([JSON.stringify(backup)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    const stamp=new Date().toISOString().slice(0,10);
+    a.href=url; a.download=`bilingual-reader-backup-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    hideStatus();
+    flashBar("Backup downloaded");
+  }catch(err){ reportError("Couldn't create backup",err); }
+}
+
+function importBackup(file){
+  const reader=new FileReader();
+  reader.onload=async()=>{
+    try{
+      showStatus("Restoring backup…");
+      const backup=JSON.parse(reader.result);
+      if(backup.format!=="bilingual-reader-backup") throw new Error("Not a valid backup file.");
+      // restore books (decode base64 back to ArrayBuffer)
+      for(const b of (backup.books||[])){
+        const rec={...b}; if(rec.data) rec.data=b64ToBuf(rec.data);
+        await store.putBook(rec);
+      }
+      for(const s of (backup.states||[])) await store.putState(s);
+      if(backup.trans){ for(const k in backup.trans) await store.putTrans(k,backup.trans[k]); }
+      hideStatus();
+      flashBar("Backup restored");
+      renderShelf();
+    }catch(err){ reportError("Couldn't restore backup",err); }
+  };
+  reader.onerror=()=>reportError("Couldn't read that file",reader.error);
+  reader.readAsText(file);
+}
+
 /* ---------- (5) Reader navigation + state ---------- */
 function updatePos(){
   pos.textContent=`${current.idx+1} / ${current.chapters.length}`;
@@ -707,13 +780,17 @@ file.onchange=e=>{if(e.target.files[0])openFromFile(e.target.files[0]).then(rend
 ;["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("drag");}));
 drop.addEventListener("drop",e=>{const f=[...e.dataTransfer.files].find(f=>/\.epub$/i.test(f.name));if(f)openFromFile(f).then(renderShelf);});
 
+// backup / restore
+$("exportBtn").onclick=exportBackup;
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
+
 $("prev").onclick=()=>step(-1);
 $("next").onclick=()=>step(1);
 $("homeBtn").onclick=goHome;
 
 // menu panel + bookmarks wiring
-$("menuBtn").onclick=openPanel;
-$("panelClose").onclick=closePanel;
+$("menuBtn").onclick=openPanel;$("panelClose").onclick=closePanel;
 $("panelBg").onclick=closePanel;
 $("bmAdd").onclick=addBookmark;
 document.querySelectorAll(".ptab").forEach(tab=>{
@@ -762,10 +839,6 @@ const themeSel=$("theme");
 const savedTheme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");
 document.body.dataset.theme=savedTheme; themeSel.value=savedTheme;
 themeSel.onchange=()=>{document.body.dataset.theme=themeSel.value;localStorage.setItem("theme",themeSel.value);};
-
-// hide top bar while scrolling down (Safari Reader behavior)
-let lastY=0;
-addEventListener("scroll",()=>{const y=scrollY;const bar=$("bar");if(y>lastY&&y>120)bar.classList.add("hidden");else bar.classList.remove("hidden");lastY=y;});
 
 renderShelf();
 
