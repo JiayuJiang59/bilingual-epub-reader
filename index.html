@@ -8,6 +8,8 @@
      NOTE: epub.js 0.3.x is on jsDelivr (cdnjs only has 0.2.13). JSZip must load BEFORE epub.js. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+<!-- PDF.js (Mozilla) for reading text-layer PDFs directly -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   /* ---------- THEME TOKENS (Apple Books / Safari Reader flavor) ---------- */
   :root{
@@ -109,6 +111,7 @@
   .chapter-head{grid-column:1/-1;border-top:1px solid var(--rule);margin:2rem 0 .5rem;padding-top:1.5rem;font-family:var(--ui);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);}
   .figure{margin:1.5rem 0;text-align:center;}
   .figure img{max-width:100%;height:auto;border-radius:.4rem;box-shadow:var(--shadow);}
+  .scan-msg{max-width:34rem;margin:2rem auto;padding:1.25rem 1.5rem;background:var(--panel);border:1px solid var(--rule);border-radius:.75rem;font-family:var(--ui);font-size:.9rem;color:var(--ink-soft);line-height:1.5;text-align:center;}
   .imgfail{font-family:var(--ui);font-size:.8rem;color:var(--ink-faint);background:var(--panel);border:1px dashed var(--rule);border-radius:.5rem;padding:.7rem 1rem;display:inline-block;}
   .imgfail code{font-size:.75rem;color:var(--accent);}
 
@@ -255,6 +258,7 @@
   .bookmeta{margin-top:.6rem;}
   .bookmeta .bt{font-family:var(--ui);font-size:.88rem;font-weight:600;color:var(--ink);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
   .bookmeta .status{font-family:var(--ui);font-size:.75rem;color:var(--ink-soft);margin-top:.15rem;}
+  .hrs{font-family:var(--ui);font-size:.82rem;margin-top:.3rem;letter-spacing:.01em;}
   .stars{margin-top:.4rem;display:flex;gap:.1rem;}
   .rightcol .stars{margin-top:0;}
   .stars button{appearance:none;border:none;background:none;font-size:1.15rem;color:var(--rule);line-height:1;cursor:pointer;padding:0 1px;min-width:24px;min-height:24px;}
@@ -336,10 +340,10 @@
   </div>
 
   <div class="drop" id="drop" tabindex="0" role="button" aria-label="Open an EPUB file">
-    <strong>Drop an EPUB here</strong><br>or click to choose a file
-    <input type="file" id="file" accept=".epub" hidden>
+    <strong>Drop an EPUB or PDF here</strong><br>or click to choose a file
+    <input type="file" id="file" accept=".epub,.pdf" hidden>
   </div>
-  <p class="note">EPUB only. Have a MOBI? Convert it to EPUB in <code>Calibre</code> (free) — drag the file in, right-click → Convert → EPUB.</p>
+  <p class="note">EPUB and text-based PDF supported.</p>
 
   <!-- DASHBOARD -->
   <section class="dash" id="dash" aria-labelledby="dashTitle" style="display:none;">
@@ -467,6 +471,9 @@
               (4) Library/shelf    (5) Reader nav    (6) UI controls
    ========================================================================= */
 
+/* PDF.js worker (required for PDF.js to run) */
+if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }
+
 /* ---------- (1) IndexedDB: hidden behind a tiny helper ---------- */
 const DB_NAME="bilingual-reader", DB_VER=1;
 let _db=null;
@@ -580,21 +587,32 @@ async function openFromFile(file){
   try{
     const buf=await file.arrayBuffer();
     const id=hash(file.name+file.size);
+    const isPdf=/\.pdf$/i.test(file.name);
     let rec=await store.getBook(id);
     if(!rec){
-      rec={id,name:file.name,data:buf,added:Date.now(),mode:null,cover:null,title:file.name.replace(/\.epub$/i,"")};
-      // probe a SEPARATE COPY so the stored buffer is never detached/consumed
-      try{
-        const probe=ePub(buf.slice(0));
-        await probe.ready;
-        const md=await probe.loaded.metadata; if(md&&md.title) rec.title=md.title;
-        try{ const c=await probe.coverUrl(); if(c){ rec.cover=await blobToDataURL(await (await fetch(c)).blob()); } }catch(_){}
-        try{ probe.destroy(); }catch(_){}
-      }catch(_){}
+      rec={id,name:file.name,data:buf,added:Date.now(),mode:null,cover:null,
+           kind:isPdf?"pdf":"epub",
+           title:file.name.replace(/\.(epub|pdf)$/i,"")};
+      if(isPdf){
+        try{
+          const pdf=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;
+          const md=await pdf.getMetadata().catch(()=>null);
+          if(md&&md.info&&md.info.Title) rec.title=md.info.Title;
+          rec._pages=pdf.numPages;
+        }catch(_){}
+      } else {
+        try{
+          const probe=ePub(buf.slice(0));
+          await probe.ready;
+          const md=await probe.loaded.metadata; if(md&&md.title) rec.title=md.title;
+          try{ const c=await probe.coverUrl(); if(c){ rec.cover=await blobToDataURL(await (await fetch(c)).blob()); } }catch(_){}
+          try{ probe.destroy(); }catch(_){}
+        }catch(_){}
+      }
       await store.putBook(rec);
     }
     if(!rec.mode){ askMode(rec); } else { loadBook(rec); }
-  }catch(err){ reportError("Couldn't open this EPUB",err); }
+  }catch(err){ reportError("Couldn't open this file",err); }
 }
 function blobToDataURL(b){return new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b);});}
 
@@ -608,25 +626,181 @@ function askMode(rec){
 
 async function loadBook(rec){
   try{
-    // fresh copy of the stored buffer (the stored one must stay intact for next time)
-    const data=rec.data.slice(0);
-    current={id:rec.id,title:rec.title,mode:rec.mode,book:ePub(data),chapters:[],idx:0,zip:null};
-    // open the same EPUB directly with JSZip so we can pull images out ourselves
-    try{ current.zip=await JSZip.loadAsync(rec.data.slice(0)); }catch(_){ current.zip=null; }
+    current={id:rec.id,title:rec.title,mode:rec.mode,kind:rec.kind||"epub",chapters:[],idx:0,zip:null,book:null,pdf:null};
     bookTitle.textContent=rec.title;
     library.style.display="none"; reader.classList.add("active"); document.body.classList.add("reading");
-    await current.book.ready;
-    try{ await current.book.loaded.navigation; }catch(_){}
-    current.chapters=current.book.spine.spineItems.map(it=>({href:it.href,id:it.idref}));
-    if(!current.chapters.length) throw new Error("No readable chapters found in this EPUB.");
+
+    if(current.kind==="pdf"){
+      showStatus("Opening PDF…");
+      current.pdf=await pdfjsLib.getDocument({data:rec.data.slice(0)}).promise;
+      const n=current.pdf.numPages;
+      current.chapters=await detectPdfChapters(current.pdf,n);
+      hideStatus();
+      if(!current.chapters.length) throw new Error("This PDF has no readable pages.");
+    } else {
+      const data=rec.data.slice(0);
+      current.book=ePub(data);
+      try{ current.zip=await JSZip.loadAsync(rec.data.slice(0)); }catch(_){ current.zip=null; }
+      await current.book.ready;
+      try{ await current.book.loaded.navigation; }catch(_){}
+      current.chapters=current.book.spine.spineItems.map(it=>({href:it.href,id:it.idref}));
+      if(!current.chapters.length) throw new Error("No readable chapters found in this EPUB.");
+    }
+
     const st=await store.getState(rec.id);
     current.idx=(st&&st.idx)||0;
+    if(current.idx>=current.chapters.length) current.idx=0;
+
+    // one-time: estimate the book's total word count from a sample, cache on the book record
+    if(!rec.wordCount){
+      try{ rec.wordCount=await estimateWordCount(); await store.putBook(rec); }catch(_){}
+    }
+    // store total sections for progress math
+    try{ const st3=await store.getState(rec.id)||{id:rec.id}; st3.totalCh=current.chapters.length; await store.putState(st3); }catch(_){}
+
     await renderChapter();
     startReadingTimer();
-    // record last-opened time for the "Recently opened" ordering
-    try{ const st2=await store.getState(rec.id)||{id:rec.id}; st2.lastOpened=Date.now(); await store.putState(st2); }catch(_){}
-    if(rec.mode==="save") prefetchWholeBook(rec);
+    try{ const st2=await store.getState(rec.id)||{id:rec.id}; st2.lastOpened=Date.now(); st2.totalCh=current.chapters.length; await store.putState(st2); }catch(_){}
+    if(rec.mode==="save" && current.kind==="epub") prefetchWholeBook(rec);
   }catch(err){ reportError("Couldn't load this book",err); goHome(); }
+}
+
+// estimate total words by sampling a few chapters/pages then scaling to the whole book
+async function estimateWordCount(){
+  const total=current.chapters.length;
+  const sampleIdxs=[...new Set([0,Math.floor(total/2),total-1])].filter(i=>i>=0&&i<total);
+  let words=0, sampled=0;
+  for(const i of sampleIdxs){
+    try{
+      let text="";
+      if(current.kind==="pdf"){
+        const ch=current.chapters[i]; const res=await pdfSegments(ch.pageStart,ch.pageEnd);
+        if(res&&res.paras) text=res.paras.join(" ");
+      } else {
+        const segs=await chapterSegments(current.chapters[i].href);
+        text=segs.filter(s=>s.kind==="text").map(s=>s.text).join(" ");
+      }
+      words+=text.trim()?text.trim().split(/\s+/).length:0; sampled++;
+    }catch(_){}
+  }
+  if(!sampled) return 0;
+  return Math.round((words/sampled)*total);
+}
+
+// extract paragraphs from a range of PDF pages using PDF.js text items + tuned heuristic
+// detect chapter/section headings across a PDF; fall back to page-groups where none found
+async function detectPdfChapters(pdf,n){
+  showStatus("Scanning structure…");
+  // pass 1: gather per-page lines (from the body, headers stripped by y-position)
+  const pageLines=[];
+  const lineFreq={}; const coreFreq={};
+  for(let p=1;p<=n;p++){
+    const page=await pdf.getPage(p);
+    const vp=page.getViewport({scale:1});
+    const content=await page.getTextContent();
+    const top=vp.height*0.93, bot=vp.height*0.07;
+    const items=content.items.filter(it=>it.str&&it.str.trim()&&it.transform[5]<top&&it.transform[5]>bot);
+    // group into lines by y
+    const lines=[]; let cur=null;
+    items.forEach(it=>{ const y=Math.round(it.transform[5]);
+      if(cur&&Math.abs(cur.y-y)<=3) cur.parts.push(it); else { cur={y,parts:[it]}; lines.push(cur); } });
+    lines.sort((a,b)=>b.y-a.y);
+    const texts=lines.map(l=>l.parts.map(x=>x.str).join("").replace(/\s+/g," ").trim()).filter(Boolean);
+    pageLines.push(texts);
+    texts.forEach(t=>{ lineFreq[t]=(lineFreq[t]||0)+1; const m=t.match(/^\d{1,3}\s+(.{4,60})$/); if(m) coreFreq[m[1]]=(coreFreq[m[1]]||0)+1; });
+  }
+  const running=new Set(Object.keys(lineFreq).filter(t=>lineFreq[t]>=4));
+  const commonTitles=new Set(Object.keys(coreFreq).filter(t=>coreFreq[t]>=3));
+  const isTocPage=texts=>texts.filter(s=>/^\d{1,2}\s+[A-Z]/.test(s)).length>=6;
+
+  function headingType(s){
+    if(!s||s.length>60) return null;
+    if(running.has(s)) return null;
+    const core=s.replace(/^\d{1,3}\s+/,"");
+    if(commonTitles.has(core)) return null;
+    if(s.endsWith(".")||s.endsWith(",")) return null;
+    if(/\d,\d/.test(s)) return null;
+    if(s.indexOf(",")>=0 && /\d/.test(s)) return null;
+    if(/^(part|chapter|section|book|unit|lesson)\s+([ivxlc]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.test(s)) return "keyword";
+    if(/^(introduction|conclusion|contents|preface|references|bibliography|index|notes|appendix|foreword|epilogue|prologue|glossary)$/i.test(s)) return "named";
+    const m=s.match(/^(\d{1,2})\s+([A-Z][a-z].{3,50})$/);
+    if(m&&!/\d/.test(m[2])) return "numbered";
+    return null;
+  }
+
+  // pass 2: find heading pages
+  const marks=[]; // {page, title}
+  for(let p=1;p<=n;p++){
+    const texts=pageLines[p-1];
+    if(isTocPage(texts)) continue;
+    for(const s of texts){ if(headingType(s)){ marks.push({page:p,title:s}); break; } } // one heading per page max
+  }
+  // dedupe adjacent identical titles
+  const clean=[];
+  marks.forEach(m=>{ if(!clean.length||clean[clean.length-1].title!==m.title) clean.push(m); });
+
+  hideStatus();
+  // build chapters from marks; if too few, fall back to page-groups
+  if(clean.length>=2){
+    const chapters=[];
+    for(let i=0;i<clean.length;i++){
+      const start=clean[i].page;
+      const end=(i+1<clean.length)?clean[i+1].page-1:n;
+      if(end>=start) chapters.push({pageStart:start,pageEnd:end,label:clean[i].title});
+    }
+    // prepend a section for any front pages before the first heading
+    if(chapters.length && chapters[0].pageStart>1) chapters.unshift({pageStart:1,pageEnd:chapters[0].pageStart-1,label:"Beginning"});
+    // split any over-long section (>12 pages) into page-groups so chapters stay manageable
+    const out=[];
+    chapters.forEach(c=>{
+      if(c.pageEnd-c.pageStart<=12){ out.push(c); }
+      else { for(let s=c.pageStart;s<=c.pageEnd;s+=8){ out.push({pageStart:s,pageEnd:Math.min(c.pageEnd,s+7),label:s===c.pageStart?c.label:c.label+" (cont.)"}); } }
+    });
+    return out;
+  }
+  // fallback: plain page-groups
+  const per=4, out=[];
+  for(let start=1;start<=n;start+=per){ out.push({pageStart:start,pageEnd:Math.min(n,start+per-1)}); }
+  return out;
+}
+
+async function pdfSegments(pageStart,pageEnd){
+  const out=[]; let scannedGuess=true; let totalChars=0;
+  for(let p=pageStart;p<=pageEnd;p++){
+    const page=await current.pdf.getPage(p);
+    const vp=page.getViewport({scale:1});
+    const content=await page.getTextContent();
+    const items=content.items.filter(it=>it.str && it.str.trim());
+    if(items.length) scannedGuess=false;
+    // drop items in the top/bottom 7% margins (running headers/footers/page numbers)
+    const topCut=vp.height*0.93, botCut=vp.height*0.07;
+    const body=items.filter(it=>{ const y=it.transform[5]; return y<topCut && y>botCut; });
+    // group into lines by y, then order top-to-bottom
+    const lines=[]; let cur=null;
+    body.forEach(it=>{
+      const y=Math.round(it.transform[5]);
+      if(cur && Math.abs(cur.y-y)<=3){ cur.parts.push(it); }
+      else { cur={y,parts:[it]}; lines.push(cur); }
+    });
+    lines.sort((a,b)=>b.y-a.y);
+    lines.forEach(ln=>{
+      const text=ln.parts.map(x=>x.str).join("").replace(/\s+/g," ").trim();
+      if(text){ out.push({y:ln.y,text}); totalChars+=text.length; }
+    });
+    out.push({br:true}); // page boundary marker
+  }
+  if(scannedGuess||totalChars<40) return {scanned:true};
+  // join lines into paragraphs with the tuned heuristic
+  const paras=[]; let cur="";
+  for(const ln of out){
+    if(ln.br){ continue; }
+    let s=ln.text;
+    if(cur.endsWith("-")&&!cur.endsWith("--")){ cur=cur.slice(0,-1)+s; continue; } // rejoin hyphenation
+    if(cur && /[.!?”’]$/.test(cur) && /^[“‘A-Z0-9]/.test(s) && cur.length>60){ paras.push(cur.trim()); cur=s; }
+    else { cur=(cur+" "+s).trim(); }
+  }
+  if(cur.trim()) paras.push(cur.trim());
+  return {paras};
 }
 
 async function chapterSegments(href){
@@ -685,14 +859,29 @@ async function resolveImage(rawPath,item){
 }
 
 async function renderChapter(){
-  const href=current.chapters[current.idx].href;
+  const ch=current.chapters[current.idx];
   pages.innerHTML="";
   const head=document.createElement("div");
   head.className="chapter-head";
-  head.textContent=`Section ${current.idx+1} of ${current.chapters.length}`;
+  const chLabel=current.chapters[current.idx].label;
+  head.textContent = chLabel ? chLabel : `Section ${current.idx+1} of ${current.chapters.length}`;
   pages.appendChild(head);
 
-  const segs=await chapterSegments(href);
+  let segs;
+  if(current.kind==="pdf"){
+    const res=await pdfSegments(ch.pageStart,ch.pageEnd);
+    if(res.scanned){
+      const msg=document.createElement("div");
+      msg.className="scan-msg";
+      msg.textContent="This looks like a scanned PDF — its pages are images without selectable text, so it can't be shown side-by-side. A text-based PDF or EPUB will work.";
+      pages.appendChild(msg);
+      updatePos(); await saveState();
+      return;
+    }
+    segs=res.paras.map(t=>({kind:"text",tag:"p",text:t}));
+  } else {
+    segs=await chapterSegments(ch.href);
+  }
   const segEls=[];
   segs.forEach(s=>{
     if(s.kind==="img"){
@@ -877,6 +1066,31 @@ function statusOf(b){
   if(b._st.completed) return "completed";
   return "reading";
 }
+// read/total hours estimate, with text color darkening toward completion
+function hoursEl(b){
+  if(!b.wordCount||b.wordCount<50) return null;
+  const READ_WPM=200;
+  const totalH=b.wordCount/READ_WPM/60;
+  // progress from current section over total sections
+  const st=b._st||{};
+  let prog=0;
+  if(statusOf(b)==="completed") prog=1;
+  else if(st.totalCh&&st.idx!=null) prog=Math.min(1,(st.idx+1)/st.totalCh);
+  const readH=totalH*prog;
+  const el=document.createElement("div"); el.className="hrs";
+  el.textContent=`${readH.toFixed(1)} / ${totalH.toFixed(1)} hrs`;
+  // interpolate text color: light teal (far) -> deep green (done)
+  // interpolate text color toward completion; direction depends on theme for readability
+  const isDark=document.body.dataset.theme==="dark";
+  const light=isDark?[90,200,180]:[38,120,106];
+  const dark=isDark?[130,230,210]:[8,70,55];
+  const c=light.map((v,i)=>Math.round(v+(dark[i]-v)*prog));
+  el.style.color=`rgb(${c[0]},${c[1]},${c[2]})`;
+  el.style.fontWeight = prog>=1 ? "600" : "500";
+  el.setAttribute("aria-label",`${readH.toFixed(1)} of ${totalH.toFixed(1)} estimated hours read`);
+  return el;
+}
+
 function bookStatus(b){
   const s=statusOf(b);
   if(s==="completed"){ const when=b._st.completedAt?new Date(b._st.completedAt).toLocaleDateString(undefined,{month:"short",year:"numeric"}):""; return "Completed"+(when?" · "+when:""); }
@@ -912,6 +1126,7 @@ function bookCard(b,isRecent){
   const bt=document.createElement("div"); bt.className="bt"; bt.textContent=b.title||"Untitled";
   const st=document.createElement("div"); st.className="status"; st.textContent=bookStatus(b);
   meta.appendChild(bt); meta.appendChild(st);
+  const hrs=hoursEl(b); if(hrs) meta.appendChild(hrs);
   if(!isRecent){
     meta.appendChild(statusSwitcher(b));
     if(statusOf(b)==="completed"){
@@ -932,6 +1147,7 @@ function bookRow(b){
   const bt=document.createElement("div"); bt.className="bt"; bt.textContent=b.title||"Untitled";
   const st=document.createElement("div"); st.className="status"; st.textContent=bookStatus(b);
   info.appendChild(bt); info.appendChild(st);
+  const hrs=hoursEl(b); if(hrs) info.appendChild(hrs);
   if(statusOf(b)==="completed") info.appendChild(commentEl(b));
   const right=document.createElement("div"); right.className="rightcol";
   right.appendChild(statusSwitcher(b));
@@ -1242,8 +1458,8 @@ function buildToc(){
   $("panelBookTitle").textContent=current?current.title:"Contents";
   const box=$("tabToc"); box.innerHTML="";
   if(!current){box.innerHTML='<div class="panel-empty">Open a book first.</div>';return;}
-  // prefer the book's real table of contents; fall back to spine sections
-  const nav=current.book.navigation;
+  // prefer the book's real table of contents; PDFs (no book) fall back to numbered sections
+  const nav=(current.book && current.book.navigation)?current.book.navigation:null;
   const items=(nav&&nav.toc&&nav.toc.length)?nav.toc:null;
   if(items){
     items.forEach(t=>{
@@ -1253,7 +1469,8 @@ function buildToc(){
     });
   }else{
     current.chapters.forEach((c,i)=>{
-      const b=document.createElement("button"); b.className="toc-item"; b.textContent=`Section ${i+1}`;
+      const b=document.createElement("button"); b.className="toc-item";
+      b.textContent = c.label ? c.label : (current.kind==="pdf" && c.pageStart ? `Pages ${c.pageStart}–${c.pageEnd}` : `Section ${i+1}`);
       b.onclick=()=>gotoChapter(i);
       box.appendChild(b);
     });
@@ -1263,13 +1480,12 @@ function buildToc(){
 function findSpineIndex(href){
   if(!href) return -1;
   const clean=href.split("#")[0].split("/").pop();
-  return current.chapters.findIndex(c=>c.href.split("/").pop()===clean);
+  return current.chapters.findIndex(c=>c.href && c.href.split("/").pop()===clean);
 }
 function markCurrentToc(){
-  const nav=current&&current.book.navigation;
+  const nav=(current && current.book && current.book.navigation)?current.book.navigation:null;
   const items=$("tabToc").querySelectorAll(".toc-item");
   items.forEach(el=>el.classList.remove("current"));
-  // best-effort: if using spine fallback, index matches directly
   if(!(nav&&nav.toc&&nav.toc.length)&&items[current.idx]) items[current.idx].classList.add("current");
 }
 
@@ -1346,7 +1562,7 @@ drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();file.clic
 file.onchange=e=>{if(e.target.files[0])openFromFile(e.target.files[0]).then(renderShelf);};
 ;["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("drag");}));
 ;["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("drag");}));
-drop.addEventListener("drop",e=>{const f=[...e.dataTransfer.files].find(f=>/\.epub$/i.test(f.name));if(f)openFromFile(f).then(renderShelf);});
+drop.addEventListener("drop",e=>{const f=[...e.dataTransfer.files].find(f=>/\.(epub|pdf)$/i.test(f.name));if(f)openFromFile(f).then(renderShelf);});
 
 // backup / restore
 $("exportBtn").onclick=exportBackup;
@@ -1439,9 +1655,12 @@ wireGoalInput();
 
 renderHome();
 
-// startup check: make sure the EPUB engine actually loaded
+// startup check: make sure the reading engines actually loaded
 if(typeof ePub==="undefined"){
   reportError("The EPUB engine didn't load — check your internet connection and reload",null);
+}
+if(typeof pdfjsLib==="undefined"){
+  console.warn("PDF.js did not load — PDF reading will be unavailable this session.");
 }
 </script>
 </body>
